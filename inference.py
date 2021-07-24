@@ -18,7 +18,5 @@ def run_visualization(url, model):
   print('running deeplab on image %s...' % url)
   # 추론
   resized_im, seg_map = model.run(original_im)
-  # 배열 전체 출력
-  np.set_printoptions(threshold=sys.maxsize)
-  print(seg_map)
+  return seg_map
   # vis_segmentation(resized_im, seg_map)

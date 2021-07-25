@@ -1,11 +1,5 @@
-import numpy as np
 from PIL import Image
-import sys
-# tensorflow_version 1.15 (gpu)
-import tensorflow as tf
 from deeplab import *
-
-
 
 def run_visualization(url, model):
   """Inferences DeepLab model and visualizes result."""

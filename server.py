@@ -14,7 +14,6 @@ def handle_request():
 
     seg_map = inference.run_visualization(filename, model)
     return {"segmap":seg_map.tolist()}
-    # return "Flask Server Good"
 
 if __name__ == "__main__":
     model=DeepLabModel('')

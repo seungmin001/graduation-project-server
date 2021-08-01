@@ -13,7 +13,7 @@ class DeepLabModel(object):
   INPUT_TENSOR_NAME = 'ImageTensor:0'
   OUTPUT_TENSOR_NAME = 'SemanticPredictions:0'
   INPUT_SIZE = 513
-  FROZEN_GRAPH_NAME = ['frozen_inference_graph','frozen_xception','graph0718_mobilenet']
+  FROZEN_GRAPH_NAME = ['frozen_inference_graph','frozen_xception','graph0718_mobilenet','xception0726']
 
   def __init__(self, path):
     """Creates and loads pretrained deeplab model."""
@@ -22,7 +22,7 @@ class DeepLabModel(object):
     graph_def = None
     
     # Import graph from frozen graph
-    f=open("./savedModel/frozen_xception.pb","rb")
+    f=open("./savedModel/xception0726.pb","rb")
     graph_def=tf.GraphDef.FromString(f.read())
 
     if graph_def is None:

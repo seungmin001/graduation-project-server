@@ -1,16 +1,15 @@
 from PIL import Image
 from deeplab import *
 
-def run_visualization(url, model):
-  """Inferences DeepLab model and visualizes result."""
+def run_model(fileName, model):
+  """Inferences DeepLab model and return results"""
   try:
-    original_im = Image.open(url)
+    original_im = Image.open(fileName)
   except IOError:
-    print('Cannot retrieve image. Please check url: ' + url)
+    print('Cannot retrieve image. Please check file path: ' + fileName)
     return
 
-  print('running deeplab on image %s...' % url)
+  print('running deeplab on image %s...' % fileName)
   # 추론
   resized_im, seg_map = model.run(original_im)
   return seg_map
-  # vis_segmentation(resized_im, seg_map)

@@ -7,6 +7,7 @@ from deeplab import DeepLabModel
 # 특정 파일 추론 시
 import time
 import numpy as np
+from PIL import Image
 '''
 
 app = flask.Flask(__name__)
@@ -19,9 +20,13 @@ def handle_request():
     print("Received image File name : "+ imagefile.filename)
     imagefile.save(filename) # image file로 save
 
-    seg_map = inference.run_model(filename, model) # 추론 실행 (segmentation class map 반환)
+    # 추론 실행 (segmentation class 배열 반환)
+    resized_im,seg_map = inference.run_model(filename, model) 
 
-    return {"segmap":seg_map.tolist()} # json data형태로 response msg 보냄.
+    # 경계선 얻어내기
+    seg=inference.lineDetect(resized_im,seg_map)
+
+    return {"segmap":seg.tolist()} # json data형태로 response msg 보냄.
 
 if __name__ == "__main__":
     model=DeepLabModel('') # 서버 실행 시 모델 미리 로드
@@ -32,10 +37,12 @@ if __name__ == "__main__":
     # 특정 파일 추론 시
     time.sleep(5)
 
-    seg_map = inference.run_model("./savedModel/image/glass_10158.jpg", model)
+    img=Image.open("./savedModel/image/glass_30196.jpg")
+    img2=img.convert('RGB').resize((513,513),Image.ANTIALIAS)
+    seg_map = inference.run_model(img2, model)
+    print(len(seg_map), len(seg_map[0]))
     time.sleep(5)
-    file=open("./maptxt/glass_10158.txt","w")
+    file=open("./maptxt/glass_30196.txt","w")
     np.savetxt(file, seg_map.astype(int), fmt='%i')
     file.close()
-
     '''

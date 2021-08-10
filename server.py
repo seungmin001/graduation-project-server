@@ -31,7 +31,7 @@ def handle_request():
 if __name__ == "__main__":
     model=DeepLabModel('') # 서버 실행 시 모델 미리 로드
 
-    app.run(host="0.0.0.0", port=5000, debug=True) # 서버 실행
+    app.run(host="0.0.0.0", port=8081, debug=True) # 서버 실행
     
     '''
     # 특정 파일 추론 시

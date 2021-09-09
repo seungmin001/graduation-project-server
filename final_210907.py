@@ -1,25 +1,12 @@
 import cv2
 import numpy as np
+import time
 from math import hypot
 
 def get_dist(point_a, point_b):
     x1, y1 = point_a
     x2, y2 = point_b
     return hypot(x1-x2, y1-y2)
-
-def readLabel(img_name):
-    # 파일 열어 numpy array로 변환하는 함수
-    # with open('./txt/'+img_name+'.txt', 'r') as file:
-    #     output = [line.strip().split(' ') for line in file.readlines()]
-    with open('./txt/210826/'+img_name+'_clahe.txt', 'r') as file:
-        output = [line.strip().split(' ') for line in file.readlines()]
-
-    # numpy array로 변환
-    output = np.array(output)
-
-    # 문자 -> int로 타입 변환
-    output = output.astype('uint8')
-    return output
 
 def arr2img(arr):
     # 0 -> [1,0,0]
@@ -41,14 +28,7 @@ def auto_canny(image, sigma=0.33):
     return cv2.Canny(image, lower, upper)
 
 
-def blend2img(img1, img2, mode):
-    blended = cv2.addWeighted(img1, 0.8, img2, 0.4, 0, img1, mode)
-    # cv2.imshow('blended', blended)
-    return blended
-
-
 def findMostPoint(cnt):
-    cnt = np.asarray(cnt)
     leftmost = tuple(cnt[cnt[:, :, 0].argmin()][0])
     rightmost = tuple(cnt[cnt[:, :, 0].argmax()][0])
     topmost = tuple(cnt[cnt[:, :, 1].argmin()][0])
@@ -107,13 +87,16 @@ def trimFluid(line, point, label, cup_upper_height):
     label[correction_height + cup_upper_height:top +
           int((bottom-top)*0.4), left:right+1] = 2
     # correction_height이 기존 액체 label 상단 점보다 낮게 나왔을 경우(값이 클 경우) 위를 컵 label로 지움
-    label[np.array(np.where(label == 1))[0].min()          :correction_height + cup_upper_height, left:right+1] = 1
+    label[np.array(np.where(label == 1))[0].min():correction_height + cup_upper_height, left:right+1] = 1
     # 액체와 마찬가지로 컵 label도 컵 윗면 세로 반지름(cup_upper_height)만큼 제외
     label[:np.array(np.where(label == 1))[0].min() +
           cup_upper_height, :] = 0
 
     # cup, fluid 값 변경시킨 것이 배경 침범할 수 있으므로(좌우를 액체 가장 왼쪽,오른쪽을 기준으로 해서) 배경값들만 기존 값으로 변경
     label[np.where(label_copy == 0)] = 0
+
+    # cv2.imshow('', label*120)
+    # cv2.waitKey(0)
 
     return label
 
@@ -156,20 +139,33 @@ def checkCupNum(contours_cup, label_012):
             y = int(M1['m01']/M1['m00'])
             M = np.append(M, np.array([int(get_dist([x, y], [250, 250]))]), axis=0)
 
+            # tmp_length = cv2.arcLength(i, False)
+            # print(tmp_length)
+            # M = np.append(M, np.array(tmp_length))
+
         # 거리순으로 인덱스 정렬 후 중심과 가장 가까운 contour의 좌우상하값 구하기
         idx = M.argsort()
         cnt_cup = np.array(contours_cup[idx[0]]).reshape(
             len(contours_cup[idx[0]]), 2)
+        # cnt_cup = np.array(contours_cup[idx[-1]]).reshape(
+        #     len(contours_cup[idx[-1]]), 2)
         left = cnt_cup[:, 0].min()
         right = cnt_cup[:, 0].max()
         top = cnt_cup[:, 1].min()
         bottom = cnt_cup[:, 1].max()
 
         # 컵 주위 5픽셀 제외 나머지 label값 0으로 변경
-        label_012[:top-5, :] = 0       # 상
-        label_012[bottom+5:, :] = 0    # 하
-        label_012[:, :left-5] = 0       # 좌
-        label_012[:, right+5:] = 0       # 우
+        if(top-5 >= 0):
+            label_012[:top-5, :] = 0       # 상
+
+        if(bottom+5 <= 512):
+            label_012[bottom+5:, :] = 0    # 하
+
+        if(left-5 >= 0):
+            label_012[:, :left-5] = 0       # 좌
+
+        if(right+5 <= 512):
+            label_012[:, right+5:] = 0       # 우
 
         return True, label_012
 
@@ -216,16 +212,15 @@ def trimFluidFollowCup(label, cnt_cup):
     if(cup_height.max() > fluid_height.max()):
         for i in range(fluid_height.max()+1, cup_height.max()+1):
             label[i, :] = 0
-
+    # cv2.imshow(',', label*120)
+    # cv2.waitKey(0)
     return label
-
 
 def trimLabel(image_name,seg_map):
     # 이미지 읽기
     img = cv2.imread(image_name)
     img = cv2.resize(img, dsize=(513, 513),
                      interpolation=cv2.INTER_AREA)
-    img_copy = img.copy()
 
     # 라벨 읽기
     label_012 = seg_map # readLabel(image_name)
@@ -267,6 +262,14 @@ def trimLabel(image_name,seg_map):
         # label 변경 시(컵2개이상인경우) contour 다시 구함
         if(many_cup):
             return False, [], "컵을 하나만 비치해주세요"
+            label = arr2img(label_012)
+            label_gray = cv2.cvtColor(label*120, cv2.COLOR_RGB2GRAY)
+            label_cup = np.where(label_gray == 14, 70, label_gray)
+            label_cup_canny = auto_canny(label_cup)
+            contours_cup, _ = cv2.findContours(
+                label_cup_canny, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+            label_cup_mask = label_cup == 70
+            reduce_label_cup_mask = modifyMask(label_cup_mask, -10)
 
         # 가장 긴 contour를 cup의 contour로 가정
         cnt_cup = []
@@ -335,8 +338,6 @@ def trimLabel(image_name,seg_map):
             reduce_label_cup_mask, small_canny_enlarge, 0)
         filtered_canny = np.reshape(filtered_canny, (513, 513))
 
-        # cv2.imshow('canny', filtered_canny)
-
         # 컵부분만 남긴 edge들을 contour로 변환. 각 edge의 길이 비교를 위함.
         contours_filtered_cup, _ = cv2.findContours(
             filtered_canny, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
@@ -370,6 +371,7 @@ def trimLabel(image_name,seg_map):
             y = int(M1['m01']/M1['m00'])
             M = np.append(M, np.array([[-1*(i+1), x, y]]), axis=0)
 
+
         # 액체의 middle_top과 가장 가까운 중심점을 갖는 edge 찾기
         tmp = []
         for i in range(5):
@@ -385,12 +387,7 @@ def trimLabel(image_name,seg_map):
         # 액체 label을 컵 따라 매끈하게 만드는 함수
         # + 액체 밑면 중심을 통과하도록 평평하게 만들며 컵의 밑면도 지움
         label_012 = trimFluidFollowCup(label_012, cnt_cup)
-
-    # 각 라벨 별 픽셀 개수 출력
-    label_count = np.unique(label_012, return_counts=True)
-    print(label_count)
-
-    blended = cv2.addWeighted(img_copy, 0.8, label*120, 0.4, 0, img, 0)
-    # cv2.imshow('blended_original', blended)
+    else:
+        return False, [], "액체가 인식되지 않았습니다."
 
     return True, label_012, "추론에 성공하였습니다."

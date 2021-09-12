@@ -87,7 +87,7 @@ def trimFluid(line, point, label, cup_upper_height):
     label[correction_height - cup_upper_height:top +
           int((bottom-top)*0.4), left:right+1] = 2
     # correction_height이 기존 액체 label 상단 점보다 낮게 나왔을 경우(값이 클 경우) 위를 컵 label로 지움 >>>> 윗 내용따라 포함하므로 + ->= - 로 변경
-    label[np.array(np.where(label == 1))[0].min()          :correction_height - cup_upper_height, left:right+1] = 1
+    label[np.array(np.where(label == 1))[0].min() : correction_height - cup_upper_height, left:right+1] = 1
     # 컵 label 컵 윗면 세로 반지름(cup_upper_height)만큼 제외
     label[:np.array(np.where(label == 1))[0].min() +
           cup_upper_height, :] = 0
@@ -199,7 +199,7 @@ def trimFluidFollowCup(label, cnt_cup):
     # if want to remove the bottom of the cup >>>>> 요기도 추가 학습 후 고려해볼 것. 액체 추론이 제대로 안 될 경우 아래가 너무 많이 지워짐..
     cup_height = np.where(label == 1)[0]
     cup_height = np.unique(cup_height)
-    # print(len(cup_height))
+    
     if((len(cup_height) > 0) and (cup_height.max() > fluid_height.max())):
         for i in range(fluid_height.max()+1, cup_height.max()+1):
             label[i, :] = 0
@@ -253,7 +253,7 @@ def checkVolumnOfLiquid(label, ratio):
     print("valid_fluid_row : ",valid_height)
 
     label[int(valid_height) -
-          1:int(valid_height)+1, :] = 3
+          1:int(valid_height)+1, cup[1].min():cup[1].max()] = 3
 
     if((ratio-2 <= fluid_volumn/valid_cup_volumn*100)): # and (ratio+2 >= fluid_volumn/valid_cup_volumn*100)):
         return label, True
@@ -278,21 +278,6 @@ def calculateVolumnByPart(cup, fluid, cup_h_top, cup_h_bottom, fluid_h_top, rati
         part_bottom = cup[1, np.where(cup[0] == h_part_bottom)[0]]
         part_bottom_radius = int((part_bottom.max() - part_bottom.min())/2)
 
-        # 역사다리꼴이 아닌 사다리꼴 형태를 띄는 경우 두 반지름 값을 바꿔 계산할 필요 O
-        if(part_bottom_radius > part_top_radius):
-            short_radius = part_top_radius
-            long_radius = part_bottom_radius
-        else:
-            short_radius = part_bottom_radius
-            long_radius = part_top_radius
-
-        virtual_height_part = (h_part_bottom-h_part_top)*short_radius / \
-            (long_radius - short_radius)
-
-        v1 = 3.14*long_radius*long_radius * \
-            (h_part_bottom-h_part_top+virtual_height_part)/3
-        v2 = 3.14*short_radius*short_radius*(virtual_height_part)/3
-
         # 현재 값을 구하는 중인 부분에 액체가 포함된 경우
         if((fluid_h_top >= h_part_top) and (fluid_h_top <= h_part_bottom)):
             fluid_top = fluid[1, np.where(fluid[0] == fluid_h_top)[0]]
@@ -304,16 +289,39 @@ def calculateVolumnByPart(cup, fluid, cup_h_top, cup_h_bottom, fluid_h_top, rati
                 short_radius = fluid_top_radius
                 long_radius = part_bottom_radius
 
-            virtual_height_part_ = (h_part_bottom-fluid_h_top)*short_radius / \
+            if(long_radius != short_radius):
+                virtual_height_part_ = (h_part_bottom-fluid_h_top)*short_radius / \
+                    (long_radius - short_radius)
+
+                v1_ = 3.14*long_radius*long_radius * \
+                    (h_part_bottom-fluid_h_top+virtual_height_part_)/3
+                v2_ = 3.14*short_radius * \
+                    short_radius*(virtual_height_part_)/3
+                fluid_volumn_sum = volumn_sum + (v1_-v2_)
+            else:
+                fluid_volumn_sum = volumn_sum + 3.14 * long_radius * \
+                    long_radius * (h_part_bottom - fluid_h_top)
+
+        # 역사다리꼴이 아닌 사다리꼴 형태를 띄는 경우 두 반지름 값을 바꿔 계산할 필요 O
+        if(part_bottom_radius > part_top_radius):
+            short_radius = part_top_radius
+            long_radius = part_bottom_radius
+        else:
+            short_radius = part_bottom_radius
+            long_radius = part_top_radius
+
+        if(long_radius != short_radius):
+            virtual_height_part = (h_part_bottom-h_part_top)*short_radius / \
                 (long_radius - short_radius)
 
-            v1_ = 3.14*long_radius*long_radius * \
-                (h_part_bottom-fluid_h_top+virtual_height_part_)/3
-            v2_ = 3.14*short_radius * \
-                short_radius*(virtual_height_part_)/3
-            fluid_volumn_sum = volumn_sum + (v1_-v2_)
+            v1 = 3.14*long_radius*long_radius * \
+                (h_part_bottom-h_part_top+virtual_height_part)/3
+            v2 = 3.14*short_radius*short_radius*(virtual_height_part)/3
 
-        volumn_sum = volumn_sum + (v1-v2)
+            volumn_sum = volumn_sum + (v1-v2)
+        else:
+            volumn_sum = volumn_sum + 3.14 * long_radius * \
+                long_radius * (h_part_bottom-h_part_top)
 
         h_part_bottom = h_part_bottom - part_height
 
@@ -340,13 +348,18 @@ def calculateVolumnByPart(cup, fluid, cup_h_top, cup_h_bottom, fluid_h_top, rati
             short_radius = part_bottom_radius
             long_radius = part_top_radius
 
-        virtual_height_part = (h_part_bottom-h_part_top)*short_radius / \
-            (long_radius - short_radius)
+        if(long_radius != short_radius):
+            virtual_height_part = (h_part_bottom-h_part_top)*short_radius / \
+                (long_radius - short_radius)
 
-        v1 = 3.14*long_radius*long_radius * \
-            (h_part_bottom-h_part_top+virtual_height_part)/3
-        v2 = 3.14*short_radius*short_radius*(virtual_height_part)/3
-        virtual_volumn_sum = virtual_volumn_sum + (v1-v2)
+            v1 = 3.14*long_radius*long_radius * \
+                (h_part_bottom-h_part_top+virtual_height_part)/3
+            v2 = 3.14*short_radius*short_radius*(virtual_height_part)/3
+
+            virtual_volumn_sum = virtual_volumn_sum + (v1-v2)
+        else:
+            virtual_volumn_sum = virtual_volumn_sum + 3.14 * \
+                long_radius * long_radius * (h_part_bottom-h_part_top)
 
         height = 0
         if (virtual_volumn_sum > valid_volumn):

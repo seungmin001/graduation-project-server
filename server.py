@@ -2,9 +2,8 @@ import flask
 import werkzeug
 import inference
 from deeplab import DeepLabModel
-from final_210907 import trimLabel
+from trimLabel_210910 import trimLabel,checkAreaOfLiquid, checkVolumnOfLiquid
 import os
-from checkfluid import checkAreaOfLiquid, checkVolumnOfLiquid
 '''
 # 특정 파일 추론 시
 import time
@@ -34,7 +33,7 @@ def handle_request():
     # {"ratio":"true"/"false"}
     requiredRatio = flask.request.form["ratio"]
     print("requiredRatio",requiredRatio)
-    if checkAreaOfLiquid(seg,float(requiredRatio)):
+    if checkVolumnOfLiquid(seg,float(requiredRatio)):
         return {"success":"true","segmap":seg.tolist(),"msg":"비율 만족! 다음 단계로 진행하세요", "ratio":"true"}
     else :
         return {"success":"true","segmap":seg.tolist(),"msg":msg, "ratio":"false"}

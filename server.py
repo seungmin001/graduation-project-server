@@ -24,19 +24,20 @@ def handle_request():
     # 추론 실행 (segmentation class 배열 반환)
     resized_im,seg_map = inference.run_model(filename, model) 
     # 경계선 얻어내기
-    # seg=inference.lineDetect(resized_im,seg_map)
+    # issuccess : 인식 후처리에서 성공/실패 , msg : status에 띄울 말
     issuccess, seg, msg = trimLabel(filename,seg_map)
     if not issuccess:
-        return {"success":"false","msg":msg,"ratio":"false"}
+        return {"success":"false","msg":msg}
     
     # check fluid
-    # {"ratio":"true"/"false"}
     requiredRatio = flask.request.form["ratio"]
     print("requiredRatio",requiredRatio)
-    if checkVolumnOfLiquid(seg,float(requiredRatio)):
-        return {"success":"true","segmap":seg.tolist(),"msg":"비율 만족! 다음 단계로 진행하세요", "ratio":"true"}
+    # isCheckable : ratio 측정 성공여부 및 넘김 여부 , ratioMsg : 해당 결과 설명문
+    _, isCheckable, ratioMsg, ratioStatus = checkVolumnOfLiquid(seg,float(requiredRatio))
+    if isCheckable:
+        return {"success":"true","segmap":seg.tolist(),"msg":msg, "ratio":"true", "ratioMsg":ratioMsg,"ratioStatus":ratioStatus}
     else :
-        return {"success":"true","segmap":seg.tolist(),"msg":msg, "ratio":"false"}
+        return {"success":"true","segmap":seg.tolist(),"msg":msg, "ratio":"false", "ratioMsg":ratioMsg,"ratioStatus":ratioStatus}
     # segmentation 완료 후 저장한 사진 삭제
     if os.path.exists(filename):
         os.remove(filename)

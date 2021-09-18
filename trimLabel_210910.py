@@ -200,9 +200,10 @@ def trimFluidFollowCup(label, cnt_cup):
     cup_height = np.where(label == 1)[0]
     cup_height = np.unique(cup_height)
     
-    if((len(cup_height) > 0) and (cup_height.max() > fluid_height.max())):
-        for i in range(fluid_height.max()+1, cup_height.max()+1):
-            label[i, :] = 0
+    if((len(fluid_height) > 0) and (len(cup_height) > 0)):
+        if (cup_height.max() > fluid_height.max()):
+            for i in range(fluid_height.max()+1, cup_height.max()+1):
+                label[i, :] = 0
     return label
 
 
@@ -232,7 +233,7 @@ def checkVolumnOfLiquid(label, ratio):
         # 액체 없는 경우 컵 밑면 == 컵 밑면 근데 액체 없으면 일정 비율만큼 들어왔는지 검사할 필요가 X,,
         # cup_bottom_height = cup[0].max()
         # cup_bottom = cup[1, np.where(cup[0] == cup_bottom_height)[0]]
-        return label, False
+        return label, False, "액체가 인식되지 않았습니다.","no"
     else:
         # 액체 있는 경우 컵 밑면 == 액체 밑면
         cup_bottom_height = fluid[0].max()
@@ -240,25 +241,25 @@ def checkVolumnOfLiquid(label, ratio):
     cup_top_height = cup[0].min()
     fluid_top_height = fluid[0].min()
 
-    cup_volumn, fluid_volumn, valid_height = calculateVolumnByPart(
+    _, _, valid_height = calculateVolumnByPart(
         cup, fluid, cup_top_height, cup_bottom_height, fluid_top_height, ratio, 5)
 
-    valid_cup_volumn = cup_volumn*0.8
+   
     # print('valid_cup_volumn: ', valid_cup_volumn)
     # print('fluid_volumn: ', fluid_volumn)
     # print(fluid_volumn/valid_cup_volumn*100)
-
-    print("fluid_volumn/valid_cup_volumn*100",fluid_volumn/valid_cup_volumn*100)
     
-    print("valid_fluid_row : ",valid_height)
+    print("valid_fluid_row, fluid_top_height : ",valid_height,fluid_top_height)
 
     label[int(valid_height) -
-          1:int(valid_height)+1, cup[1].min():cup[1].max()] = 3
+          2:int(valid_height)+2, cup[1].min():cup[1].max()] = 3
 
-    if((ratio-2 <= fluid_volumn/valid_cup_volumn*100)): # and (ratio+2 >= fluid_volumn/valid_cup_volumn*100)):
-        return label, True
+    if((fluid_top_height <= valid_height+2) and (fluid_top_height >= valid_height-2)):
+        return label, True, '적정량을 따랐습니다. :) 잠시 기다려주세요.',"good"
+    elif (fluid_top_height > valid_height+2):
+        return label, False, '재료를 더 따라주세요.',"under"
     else:
-        return label, False
+        return label, True, '적정량을 초과하였습니다.',"over"
 
 
 def calculateVolumnByPart(cup, fluid, cup_h_top, cup_h_bottom, fluid_h_top, ratio, part_num):

@@ -23,6 +23,7 @@ def handle_request():
 
     # 추론 실행 (segmentation class 배열 반환)
     resized_im,seg_map = inference.run_model(filename, model) 
+    # return {"success":"true","segmap":seg_map.tolist(),"msg":"실험입니다.", "ratio":"false"}
     # 경계선 얻어내기
     # issuccess : 인식 후처리에서 성공/실패 , msg : status에 띄울 말
     issuccess, seg, msg = trimLabel(filename,seg_map)
@@ -53,12 +54,23 @@ if __name__ == "__main__":
     # 특정 파일 추론 시
     time.sleep(5)
 
-    img=Image.open("./savedModel/image/glass_30196.jpg")
-    img2=img.convert('RGB').resize((513,513),Image.ANTIALIAS)
-    seg_map = inference.run_model(img2, model)
+    _,seg_map = inference.run_model("./savedModel/image/glass_10263.jpg", model)
     print(len(seg_map), len(seg_map[0]))
-    time.sleep(5)
-    file=open("./maptxt/glass_30196.txt","w")
-    np.savetxt(file, seg_map.astype(int), fmt='%i')
-    file.close()
+
+    # file=open("./maptxt/glass_30196.txt","w")
+    # np.savetxt(file, seg_map.astype(int), fmt='%i')
+    # file.close()
+
+    # Make LUT (Look Up Table) with your 3 colours
+    LUT = np.zeros((3,3),dtype=np.uint8)
+    LUT[0]=[0,0,0]
+    LUT[1]=[0,255,0]
+    LUT[2]=[0,0,255]
+    pixelmap=LUT[seg_map]
+
+    im = Image.fromarray(pixelmap)
+    im.save("./savedModel/image/your_array10263.jpg")
+    #file=open("./maptxt/glass_30196.txt","w")
+    #np.savetxt(file, seg_map.astype(int), fmt='%i')
+    #file.close()
     '''

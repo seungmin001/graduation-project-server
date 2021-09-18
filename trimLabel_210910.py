@@ -233,7 +233,7 @@ def checkVolumnOfLiquid(label, ratio):
         # 액체 없는 경우 컵 밑면 == 컵 밑면 근데 액체 없으면 일정 비율만큼 들어왔는지 검사할 필요가 X,,
         # cup_bottom_height = cup[0].max()
         # cup_bottom = cup[1, np.where(cup[0] == cup_bottom_height)[0]]
-        return label, False, "액체가 인식되지 않았습니다.","no"
+        return label, False, "액체가 인식되지 않았습니다","no"
     else:
         # 액체 있는 경우 컵 밑면 == 액체 밑면
         cup_bottom_height = fluid[0].max()
@@ -255,11 +255,11 @@ def checkVolumnOfLiquid(label, ratio):
           2:int(valid_height)+2, cup[1].min():cup[1].max()] = 3
 
     if((fluid_top_height <= valid_height+2) and (fluid_top_height >= valid_height-2)):
-        return label, True, '적정량을 따랐습니다. :) 잠시 기다려주세요.',"good"
+        return label, True, '적정량을 따랐습니다. :) 잠시 기다려주세요',"good"
     elif (fluid_top_height > valid_height+2):
-        return label, False, '재료를 더 따라주세요.',"under"
+        return label, False, '재료를 더 따라주세요',"under"
     else:
-        return label, True, '적정량을 초과하였습니다.',"over"
+        return label, True, '적정량을 초과하였습니다',"over"
 
 
 def calculateVolumnByPart(cup, fluid, cup_h_top, cup_h_bottom, fluid_h_top, ratio, part_num):
@@ -499,7 +499,7 @@ def trimLabel(image_name, seg_map):
 
         if(len(contours_filtered_cup) < 5):
             # 비교 가능한 액체의 edge가 5개도 되지 않을 경우 error 코드 return
-            return False, [], '액체감지오류'
+            return False, [], '액체 감지에 오류가 발생하였습니다'
 
         # canny contour에서 면적 구해 append(길이 가장 긴 contour 찾기 위함!)
         i = 0
@@ -540,6 +540,6 @@ def trimLabel(image_name, seg_map):
         # + 액체 밑면 중심을 통과하도록 평평하게 만들며 컵의 밑면도 지움
         label_012 = trimFluidFollowCup(label_012, cnt_cup)
     else:
-        return False, [], "액체가 인식되지 않았습니다."
+        return False, [], "액체가 인식되지 않았습니다"
 
-    return True, label_012, "추론에 성공하였습니다."
+    return True, label_012, "추론에 성공하였습니다"

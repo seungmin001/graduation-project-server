@@ -1,7 +1,5 @@
 import cv2
 import numpy as np
-from PIL import Image
-import matplotlib.pyplot as plt
 import time
 from math import dist
 
@@ -10,7 +8,7 @@ FLUID_APPROX_EDGE_NUM = 3
 
 
 def readLabel(img_name):
-    with open('./txt/'+img_name+'.txt', 'r') as file:
+    with open('./txt/video/'+img_name+'.txt', 'r') as file:
         output = [line.strip().split(' ') for line in file.readlines()]
 
     # numpy array로 변환
@@ -59,17 +57,19 @@ def findMiddlePoint(cnt, middleX):
     cnt_x = cnt[:, :, 0]
     cnt_middle = np.where(cnt_x == [middleX])
 
-    # index[top bottom]
-    tmp = [0, 0]
-    if(cnt[cnt_middle[0][0]][0][1] > cnt[cnt_middle[0][1]][0][1]):
-        tmp[0] = cnt_middle[0][1]
-        tmp[1] = cnt_middle[0][0]
-    else:
-        tmp[0] = cnt_middle[0][0]
-        tmp[1] = cnt_middle[0][1]
+    bottom = [0, 0]
+    top = [512, 512]
+
+    for i in cnt_middle[0]:
+        print(cnt[i][0][1])
+        print(bottom[1])
+        if(cnt[i][0][1] <= top[1]):
+            top = cnt[i][0]
+        if(cnt[i][0][1] >= bottom[1]):
+            bottom = cnt[i][0]
 
     # find middle top&bottom point form contour (for this, have to use cv2.CHAIN_APPROX_NONE)
-    return tuple(cnt[tmp[0]][0]), tuple(cnt[tmp[1]][0])
+    return tuple(top), tuple(bottom)
 
 
 def trimFluid(line, point, label, cup_upper_height):
@@ -102,7 +102,7 @@ def trimFluid(line, point, label, cup_upper_height):
         count = count+1
     correction_height = int(sum/count)
 
-    # correction_height 보다 기존 액체 label이 높을 경우 지움 
+    # correction_height 보다 기존 액체 label이 높을 경우 지움
     if(top < correction_height):
         label[top:correction_height, left:right+1] = 1
     # cv2.imshow('', label*120)
@@ -111,12 +111,15 @@ def trimFluid(line, point, label, cup_upper_height):
     # correction_height까지 액체 label 변경. 이 때 컵 윗면의 세로 반지름(cup_upper_height)만큼은 제외 >>>>> 일단 포함하기로 ? resize 더 작게하면 액체 뒷쪽 edge 지울 수도 있을 것 같은데 여기 예외처리 잘 해야할 듯.
     # 액체가 이미지의 반 이상 찬 경우 액체 윗면이 직선에,그렇지 않을 경우 컵의 윗면에 가까울 것이라 가정.
     # (correction_height > top) or (correction_height-cup_upper_height>top) 인 경우 액체 label 채워지지 X.
+    # correction_height 부터 액체 상단 40%까지만 액체로 label 바꾸던 것 bottom까지 전부 바꾸는 것으로 변경.
+    # 액체 label이 두 개 추론된 경우 가운데 쪼개짐 발생하던 것 해결하기 위함.
     if(correction_height > 250):
         correction_height = correction_height - cup_upper_height
-    label[correction_height:top +
-          int((bottom-top)*0.4), left:right+1] = 2
+    label[correction_height:bottom+1, left:right+1] = 2
+
     # correction_height이 기존 액체 label 상단 점보다 낮게 나왔을 경우(값이 클 경우) 위를 컵 label로 지움 >>>> 윗 내용따라 포함하므로 + ->= - 로 변경
-    label[np.array(np.where(label == 1))[0].min()          :correction_height - cup_upper_height, left:right+1] = 1
+    label[np.array(np.where(label == 1))[0].min()
+                   :correction_height - cup_upper_height, left:right+1] = 1
     # 컵 label 컵 윗면 세로 반지름(cup_upper_height)만큼 제외
     label[:np.array(np.where(label == 1))[0].min() +
           cup_upper_height, :] = 0
@@ -276,8 +279,7 @@ def checkVolumnOfLiquid(label, ratio):
     # print('valid_cup_volumn: ', valid_cup_volumn)
     # print('fluid_volumn: ', fluid_volumn)
     # print(fluid_volumn/valid_cup_volumn*100)
-    label[int(valid_height) -
-          1:int(valid_height)+1, :] = 2
+    label[int(valid_height) - 5:int(valid_height)+5, :] = 2
 
     if((fluid_top_height <= valid_height+2) and (fluid_top_height >= valid_height-2)):
         return label, True, '적정량을 따랐습니다. :) 잠시 기다려주세요.'
@@ -413,211 +415,259 @@ def calcalateValidHeight(volumn, bottom_radius, virtual_height):
 
 def trimLabel(image_name):
     # 이미지 읽기
-    print('./image/'+image_name+'.jpg')
-    img = cv2.imread('./image/'+image_name+'.jpg')
+    print('./image/video/'+image_name+'.jpg')
+    img = cv2.imread('./image/video/'+image_name+'.jpg')
     img = cv2.resize(img, dsize=(513, 513),
                      interpolation=cv2.INTER_AREA)
+    # 선명도 올리는데 이용
+    clahe = cv2.createCLAHE(clipLimit=10.0, tileGridSize=(8, 8))
+    # 이미지 축소 -> 선명도 -> canny -> 확대
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    small_dst = cv2.resize(gray, dsize=(128, 128),
+                           interpolation=cv2.INTER_AREA)
+    small_dst = clahe.apply(small_dst)
+    small_canny = auto_canny(small_dst)
+    small_canny_enlarge = cv2.resize(small_canny, dsize=(513, 513),
+                                     interpolation=cv2.INTER_AREA)
 
     # 라벨 읽기
     label_012 = readLabel(image_name)
     label = arr2img(label_012)
     label_gray = cv2.cvtColor(label*120, cv2.COLOR_RGB2GRAY)
 
-    # 액체 있는 경우(!0) 액체 trim
-    if(np.count_nonzero(label_gray == 14) != 0):
-
-        # 선명도 올리기
-        clahe = cv2.createCLAHE(clipLimit=10.0, tileGridSize=(8, 8))
-
-        # canny
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        small_dst = cv2.resize(gray, dsize=(128, 128),
-                               interpolation=cv2.INTER_AREA)
-        small_dst = clahe.apply(small_dst)
-        small_canny = auto_canny(small_dst)
-        small_canny_enlarge = cv2.resize(small_canny, dsize=(513, 513),
-                                         interpolation=cv2.INTER_AREA)
-
-        # cup만 segmentation하도록 label값 조정
-        # cup: 70, liquid: 14, background: 36
-        # 액체가 무조건 컵 안에 담겨있을 것으로 가정함
+    # cup만 segmentation하도록 label값 조정
+    # cup: 70, liquid: 14, background: 36
+    # 액체가 무조건 컵 안에 담겨있을 것으로 가정함
+    if(np.count_nonzero(label_gray == 14) == 0):
+        # 액체 없는 경우 --> 기존에는 진행을 하지 않았으나, 배경 인식을 위해 필요해짐.
+        # 컵 부분만 mask해 배경에 수평edge 있는지 확인.
+        label_cup = label_gray
+    else:
+        # 액체 있는 경우(!0)
         label_cup = np.where(label_gray == 14, 70, label_gray)
 
-        # cup segmentation canny -> contour
-        label_cup_canny = auto_canny(label_cup)
-        contours_cup, _ = cv2.findContours(
-            label_cup_canny, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    # cup segmentation canny -> contour
+    label_cup_canny = auto_canny(label_cup)
+    contours_cup, _ = cv2.findContours(
+        label_cup_canny, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    # cup 개수 확인 후 2개 이상일 경우 false return
+    # label 변경 시(컵2개이상인경우) return. 컵 여러 개인 경우 segmentation 또한 일그러지기 때문에 추가 trim 하는 대신 return 하기로 결정.
+    if(len(contours_cup) >= 4):
+        return False, label_012, '컵이 2개 이상 인식되었습니다'
 
-        # label_cup에서 컵이 있는 부분만 True, 나머지는 false로 mask 생성
-        label_cup_mask = label_cup == 70
-        # mask의 컵 부분(True/False) 축소/확대시키기
-        reduce_label_cup_mask = modifyMask(label_cup_mask, -10)
+    # 가장 긴 contour를 cup의 contour로 가정
+    cnt_cup = []
+    for i in contours_cup:
+        if (len(i) >= len(cnt_cup)):
+            cnt_cup = i
 
-        # cup 개수 확인 후 2개 이상일 경우 중심에 가장 가까운 contour 주변 5픽셀 제외하고 0으로 지움
-        many_cup, label_012 = checkCupNum(contours_cup, label_012)
+    # 컵 label이 뾰족해 이미지 상단과(액체때문) 하단에(가까워서) 닿은 경우
+    # cup edge인 cun_cup이 좌,우로 쪼개지므로 해당 상황에서의 후처리 방지.(안 할 경우 액체label 사라짐.)
+    _, _, cup_top, cup_bottom = findMostPoint(cnt_cup)
+    if(cup_top[1] == 0 and cup_bottom[1] == 512):
+        return False, label_012, '컵을 멀리서 촬영해주세요'
 
-        # label 변경 시(컵2개이상인경우) return. 컵 여러 개인 경우 segmentation 또한 일그러지기 때문에 추가 trim 하는 대신 return 하기로 결정.
-        if(many_cup):
-            return False, _
-
-        # 가장 긴 contour를 cup의 contour로 가정
-        cnt_cup = []
-        for i in contours_cup:
-            if (len(i) >= len(cnt_cup)):
-                cnt_cup = i
-
-        # liquid만 segmentation하도록 label값 조정
-        # cup mask의 윗면 일괄 false 변환에 fluid_middle_top 필요
-        # 액체 segmentation canny -> contour
-        label_fluid = np.where(label_gray == 70, 36, label_gray)
-        label_fluid_canny = auto_canny(label_fluid)
-        contours_fluid, _ = cv2.findContours(
-            label_fluid_canny, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-
-        # 가장 긴 contour를 liquid의 contour로 가정
-        cnt_fluid = []
-        for i in contours_fluid:
-            if (len(i) >= len(cnt_fluid)):
-                cnt_fluid = i
-
-        # 액체의 극점, middle_top/bottom 찾기 (이 때, middle_top[1] < middle_bottom[1])
-        fluid_left, fluid_right, _, _ = findMostPoint(
-            cnt_fluid)
-        fluid_middle_top, _ = findMiddlePoint(
-            cnt_fluid, int((fluid_left[0]+fluid_right[0])/2))
-
-        # cup mask의 윗면 일괄 false 변환. >>> 각도 제한하는 코드 필요함
-        # 컵에 액체가 많이 따라진 경우는 다루지 않을 확률이 높으며 윗면 edge가 많이 남으면 결과에 부정적 영향을 줌
-        # 컵의 위에서 아래로 내려가며 양 끝점의 거리 차를 비교했을 때 해당 값이 작아질 경우가 윗면의 지름이라 간주
-        # upper_diameter: 윗면의 지름, upper_diameter_idx: 윗면 지름의 높이값 idx
-        _, _, cup_top, cup_bottom = findMostPoint(cnt_cup)
-        upper_diameter, upper_diameter_idx = 0, 0
-        cnt_cup_copy = cnt_cup.reshape(len(cnt_cup), 2)
-        for idx in range(cup_top[1], int(cup_bottom[1]/4 + cup_top[1]/4*3)+1):  # 컵 상단에서 아래로 25%
-            cup_row = cnt_cup_copy[np.where(cnt_cup_copy[:, 1] == idx)]
-            diameter = cup_row[:, 0].max() - cup_row[:, 0].min()
-            if(diameter-upper_diameter > 2):
-                upper_diameter = diameter
-                upper_diameter_idx = idx
-            else:
-                break
-
-        cup_upper_height = upper_diameter_idx - cup_top[1]
-
-        # print('cup_upper_height: ', cup_upper_height)
-        if(cup_upper_height > 20):
-            # 컵 윗면이 많이 나온 경우
-            return False, _, '컵의 정면을 촬영해주세요'
+    # 컵에 액체가 많이 따라진 경우는 다루지 않을 확률이 높으며 윗면 edge가 많이 남으면 결과에 부정적 영향을 줌
+    # 컵의 위에서 아래로 내려가며 양 끝점의 거리 차를 비교했을 때 해당 값이 작아질 경우가 윗면의 지름이라 간주
+    # upper_diameter: 윗면의 지름, upper_diameter_idx: 윗면 지름의 높이값 idx
+    upper_diameter, upper_diameter_idx = 0, 0
+    cnt_cup_copy = cnt_cup.reshape(len(cnt_cup), 2)
+    for idx in range(cup_top[1], int(cup_bottom[1]/4 + cup_top[1]/4*3)+1):  # 컵 상단에서 아래로 25%
+        cup_row = cnt_cup_copy[np.where(cnt_cup_copy[:, 1] == idx)]
+        diameter = cup_row[:, 0].max() - cup_row[:, 0].min()
+        if(diameter == 0 or diameter-upper_diameter > 2):
+            upper_diameter = diameter
+            upper_diameter_idx = idx
         else:
-            if(fluid_middle_top[1] < int(cup_top[1]/2 + cup_bottom[1]/2)):
-                # 컵 윗면이 많이 나오지 X (정면에 가까움) + 많이 따라진 경우(컵의 반 이상 따라진 경우) 상단 5% 지움 
-                limit = int(cup_top[1]/20*19 + cup_bottom[1]/20)
-            else:
-                # 컵 윗면이 많이 나오지 X (정면에 가까움) + 컵의 반 이하로 따라진 경우 상단 25% 지움
-                limit = int(cup_top[1]/4*3 + cup_bottom[1]/4)
+            break
 
-        reduce_label_cup_mask[:limit, :] = False
-        # 컵 바닥부터 액체 높이의 2/3 지움 -> 수면 주변의 주요 edge만 남기기 위함 
-        reduce_label_cup_mask[int(
-            fluid_middle_top[1]/3*2 + cup_bottom[1]/3):cup_bottom[1], :] = False
+    # 컵 위에서 촬영하는 경우 제한. (컵 윗면의 세로반지름/가로반지름이 긴 경우)
+    cup_upper_height = upper_diameter_idx - cup_top[1]
+    print('cup_upper_height: ', cup_upper_height)
+    print(cup_upper_height / upper_diameter)
+    if(cup_upper_height / upper_diameter > 0.12):
+        # 컵 윗면이 많이 나온 경우
+        return False, label_012, '컵의 정면을 촬영해주세요'
 
-        # small_canny_enlarge에서 컵이 있는 부분만 남기고 나머지는 지움. 이 때 1차원 되므로 reshape해준다.
-        filtered_canny = np.where(
-            reduce_label_cup_mask, small_canny_enlarge, 0)
-        filtered_canny = np.reshape(filtered_canny, (513, 513))
+    # label_cup에서 컵이 있는 부분만 True, 나머지는 false로 mask 생성
+    label_cup_mask = label_cup == 70
+    # mask의 컵 부분(True/False) 축소/확대시키기
+    reduce_label_cup_mask = modifyMask(label_cup_mask, -10)
 
-        cv2.imshow('', filtered_canny)
-        cv2.waitKey(0)
+    # 우선적으로 상단 15% 지움 이후 액체 양 검사해 적을 경우 더 지울 것.
+    limit = int(cup_top[1]/20*17 + cup_bottom[1]/20*3)
+    reduce_label_cup_mask[:limit, :] = False
 
-        # 컵부분만 남긴 edge들을 contour로 변환. 각 edge의 길이 비교를 위함.
-        contours_filtered_cup, _ = cv2.findContours(
-            filtered_canny, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    # cup: 70, liquid: 14, background: 36
+    if(np.count_nonzero(label_gray == 14) == 0):
+        # 액체 없는 경우 --> 기존에는 진행을 하지 않았으나, 배경 인식을 위해 필요해짐.
+        # 컵 부분만 mask해 배경에 수평edge 있는지 확인.
+        # small_canny_cup_enlarge 컵이 있는 부분만 남기고 나머지는 지움. 이 때 1차원 되므로 reshape해준다.
+        small_dst_cup = cv2.resize(gray, dsize=(64, 64),
+                                   interpolation=cv2.INTER_AREA)
+        small_dst_cup = clahe.apply(small_dst_cup)
+        small_canny_cup = auto_canny(small_dst_cup)
+        reduce_label_cup_mask_f = reduce_label_cup_mask.astype(np.uint8)
+        reduce_label_cup_mask_f[:int(
+            cup_top[1]/100*73 + cup_bottom[1]/100*27), :] = 0
+        reduce_label_cup_mask_f[int(
+            cup_top[1]/100*27 + cup_bottom[1]/100*73):, :] = 0
+        reduce_label_cup_mask_f = cv2.resize(reduce_label_cup_mask_f, dsize=(64, 64),
+                                             interpolation=cv2.INTER_AREA)
+        filtered_canny_cup = np.where(
+            reduce_label_cup_mask_f, small_canny_cup, 0)
+        filtered_canny_cup = np.reshape(filtered_canny_cup, (64, 64))
 
-        if(len(contours_filtered_cup) < FLUID_APPROX_EDGE_NUM):
-            # 비교 가능한 액체의 edge가 일정 개수가 되지 않을 경우 error 코드 return
-            return False, _, '액체감지오류'
-
-        # canny contour에서 면적 구해 append(길이 가장 긴 contour 찾기 위함!)
         i = 0
-        contours_filtered_cup_area = np.empty((0, 2), dtype=float)
-        for cnt_ in contours_filtered_cup:
-            area = cv2.contourArea(cnt_)
-            # print(i, '면적:', area)
-            contours_filtered_cup_area = np.append(
-                contours_filtered_cup_area, np.array([[i, area]]), axis=0)
-            i = i+1
+        for row_canny, row_mask in zip(filtered_canny_cup, reduce_label_cup_mask_f):
+            # filtered_canny_cup_ = filtered_canny_cup.copy()
+            # filtered_canny_cup_[i, :] = 255
+            # reduce_label_cup_mask_f_ = reduce_label_cup_mask_f.copy()
+            # reduce_label_cup_mask_f_[i, :] = 1
+            # tmp = cv2.resize(filtered_canny_cup_, dsize=(513, 513),
+            #                  interpolation=cv2.INTER_AREA)
+            # tmp2 = cv2.resize(reduce_label_cup_mask_f_*255, dsize=(513, 513),
+            #                   interpolation=cv2.INTER_AREA)
+            # cv2.imshow('dsdsjkf', tmp)
+            # cv2.imshow('dsjkf2222', tmp2)
+            # cv2.waitKey(0)
+            count_mask = sum(row_mask == 1)/2
+            count_canny = sum(row_canny == 255)
+            i += 1
+            if(sum(row_mask == 1) != 0 and (count_mask <= count_canny)):
+                # canny와 mask 행 별로 값 있는 픽셀 수 계산해
+                # print('컵 표면을 닦거나 뒷 배경에 수평선이 보이지 않도록 해주세요.')
+                # print(count_mask, count_canny)
+                return False, label_012, '컵 표면을 닦거나 뒷 배경에 수평선이 보이지 않도록 해주세요'
+            else:
+                continue
+        return False, label_012, '액체가 인식되지 않았습니다'
 
-        # 구한 면적만 가지고 sort
-        contours_filtered_cup_area_sort = contours_filtered_cup_area[contours_filtered_cup_area[:, 1].argsort(
-        )]
+    # liquid만 segmentation하도록 label값 조정
+    # cup mask의 윗면 일괄 false 변환에 fluid_middle_top 필요
+    # 액체 segmentation canny -> contour
+    label_fluid = np.where(label_gray == 70, 36, label_gray)
+    label_fluid_canny = auto_canny(label_fluid)
+    contours_fluid, _ = cv2.findContours(
+        label_fluid_canny, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
 
-        # 길이가 가장 긴(면적이큰) 일정 개수의 edge 중심점을 계산해 M에 저장
-        M = np.empty((0, 3), dtype=int)
-        for i in range(FLUID_APPROX_EDGE_NUM):
-            M1 = cv2.moments(contours_filtered_cup[int(
-                contours_filtered_cup_area_sort[-1*(i+1)][0])])
-            x = int(M1['m10']/M1['m00'])
-            y = int(M1['m01']/M1['m00'])
-            M = np.append(M, np.array([[-1*(i+1), x, y]]), axis=0)
+    # 가장 긴 contour를 liquid의 contour로 가정
+    cnt_fluid = []
+    for i in contours_fluid:
+        if (len(i) >= len(cnt_fluid)):
+            cnt_fluid = i
 
-        # # 길이 가장 긴(면적이큰) 5개의 edge 중심점과 함께 show
-        # for i in range(FLUID_APPROX_EDGE_NUM):
-        #     img_ = img.copy()
-        #     cv2.drawContours(img_, [contours_filtered_cup[int(contours_filtered_cup_area_sort[M[i][0]][0])]], -1,
-        #                      color=(0, 230, 230), thickness=cv2.FILLED)
-        #     cv2.circle(img_, M[i][1:], 2,
-        #                color=(0, 0, 200), thickness=cv2.FILLED)
+    # 액체의 극점, middle_top/bottom 찾기 (이 때, middle_top[1] < middle_bottom[1])
+    fluid_left, fluid_right, _, _ = findMostPoint(cnt_fluid)
+    fluid_middle_top, _ = findMiddlePoint(
+        cnt_fluid, int((fluid_left[0]+fluid_right[0])/2))
 
-        #     cv2.imshow('contours', img_)
-        #     cv2.waitKey(0)
+    if(fluid_middle_top[1] >= int(cup_top[1]/2 + cup_bottom[1]/2)):
+        # 컵 윗면이 많이 나오지 X (정면에 가까움) + 컵의 반 이하로 따라진 경우 상단 25% 지움
+        limit = int(cup_top[1]/4*3 + cup_bottom[1]/4)
 
-        # 액체의 middle_top과 가장 가까운 중심점을 갖는 edge 찾기
-        tmp = []
-        for i in range(FLUID_APPROX_EDGE_NUM):
-            tmp = np.append(tmp, dist(M[i][1:], fluid_middle_top))
+    reduce_label_cup_mask[:limit, :] = False
+    # 컵 바닥부터 액체 높이의 2/3 지움 -> 수면 주변의 주요 edge만 남기기 위함
+    reduce_label_cup_mask[int(
+        fluid_middle_top[1]/3*1 + cup_bottom[1]/3*2):cup_bottom[1], :] = False
 
-        approx_line = contours_filtered_cup[int(
-            contours_filtered_cup_area_sort[M[tmp.argmin()][0]][0])]
+    # small_canny_enlarge에서 컵이 있는 부분만 남기고 나머지는 지움. 이 때 1차원 되므로 reshape해준다.
+    filtered_canny = np.where(
+        reduce_label_cup_mask, small_canny_enlarge, 0)
+    filtered_canny = np.reshape(filtered_canny, (513, 513))
 
-        # # 액체의 middle_top과 가장 가까운 중심점을 갖는 edge 시각적 확인 show
-        # cv2.drawContours(img, [approx_line], -1,
-        #                  color=(0, 0, 230), thickness=cv2.FILLED)
-        # cv2.circle(img, fluid_middle_top, 2,
-        #            color=(200, 200, 200), thickness=cv2.FILLED)
-        # cv2.circle(img, M[tmp.argmin()][1:], 2,
-        #            color=(200, 0, 0), thickness=cv2.FILLED)
-        # cv2.imshow('img', img)
-        # blend2img(gray, np.where(label_fluid ==
-        #           14, 255, label_fluid), cv2.CV_8U)
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
+    cv2.imshow('', filtered_canny)
+    cv2.waitKey(0)
 
-        # approx_line의 중간 10점 정도의 평균점 찾아 label 수정
-        # + 컵 상단 cup_upper_height만큼 지우기, 액체 상단은 더하기
-        label_012 = trimFluid(approx_line, fluid_middle_top,
-                              label_012, cup_upper_height)
-        # 액체 label을 컵 따라 매끈하게 만드는 함수
-        # + 액체 밑면 중심을 통과하도록 평평하게 만들며 컵의 밑면도 지움
-        label_012 = trimFluidFollowCup(label_012, cnt_cup)
-    else:
-        return False, label_012
+    # 컵부분만 남긴 edge들을 contour로 변환. 각 edge의 길이 비교를 위함.
+    contours_filtered_cup, _ = cv2.findContours(
+        filtered_canny, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
 
-    return True, label_012
+    if(len(contours_filtered_cup) < FLUID_APPROX_EDGE_NUM):
+        # 비교 가능한 액체의 edge가 일정 개수가 되지 않을 경우 error 코드 return
+        return False, label_012, '액체 감지에 오류가 발생했습니다'
+
+    # canny contour에서 면적 구해 append(길이 가장 긴 contour 찾기 위함!)
+    i = 0
+    contours_filtered_cup_area = np.empty((0, 2), dtype=float)
+    for cnt_ in contours_filtered_cup:
+        area = cv2.contourArea(cnt_)
+        # print(i, '면적:', area)
+        contours_filtered_cup_area = np.append(
+            contours_filtered_cup_area, np.array([[i, area]]), axis=0)
+        i = i+1
+
+    # 구한 면적만 가지고 sort
+    contours_filtered_cup_area_sort = contours_filtered_cup_area[contours_filtered_cup_area[:, 1].argsort(
+    )]
+
+    # 길이가 가장 긴(면적이큰) 일정 개수의 edge 중심점을 계산해 M에 저장
+    M = np.empty((0, 3), dtype=int)
+    for i in range(FLUID_APPROX_EDGE_NUM):
+        M1 = cv2.moments(contours_filtered_cup[int(
+            contours_filtered_cup_area_sort[-1*(i+1)][0])])
+        x = int(M1['m10']/M1['m00'])
+        y = int(M1['m01']/M1['m00'])
+        M = np.append(M, np.array([[-1*(i+1), x, y]]), axis=0)
+
+    # # 길이 가장 긴(면적이큰) 5개의 edge 중심점과 함께 시각적 show
+    # for i in range(FLUID_APPROX_EDGE_NUM):
+    #     img_ = img.copy()
+    #     cv2.drawContours(img_, [contours_filtered_cup[int(contours_filtered_cup_area_sort[M[i][0]][0])]], -1,
+    #                      color=(0, 230, 230), thickness=cv2.FILLED)
+    #     cv2.circle(img_, M[i][1:], 2,
+    #                color=(0, 0, 200), thickness=cv2.FILLED)
+
+    #     cv2.imshow('contours', img_)
+    #     cv2.waitKey(0)
+
+    # 액체의 middle_top과 가장 가까운 중심점을 갖는 edge 찾기
+    tmp = []
+    for i in range(FLUID_APPROX_EDGE_NUM):
+        tmp = np.append(tmp, dist(M[i][1:], fluid_middle_top))
+
+    approx_line = contours_filtered_cup[int(
+        contours_filtered_cup_area_sort[M[tmp.argmin()][0]][0])]
+
+    # # 액체의 middle_top과 가장 가까운 중심점을 갖는 edge 시각적 확인 show
+    # cv2.drawContours(img, [approx_line], -1,
+    #                  color=(0, 0, 230), thickness=cv2.FILLED)
+    # cv2.circle(img, fluid_middle_top, 2,
+    #            color=(200, 200, 200), thickness=cv2.FILLED)
+    # cv2.circle(img, M[tmp.argmin()][1:], 2,
+    #            color=(200, 0, 0), thickness=cv2.FILLED)
+    # cv2.imshow('img', img)
+    # blend2img(gray, np.where(label_fluid ==
+    #                          14, 255, label_fluid), cv2.CV_8U)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+    # approx_line의 중간 10점 정도의 평균점 찾아 label 수정
+    # + 컵 상단 cup_upper_height만큼 지우기, 액체 상단은 더하기
+    label_012 = trimFluid(approx_line, fluid_middle_top,
+                          label_012, cup_upper_height)
+    # 액체 label을 컵 따라 매끈하게 만드는 함수
+    # + 액체 밑면 중심을 통과하도록 평평하게 만들며 컵의 밑면도 지움
+    label_012 = trimFluidFollowCup(label_012, cnt_cup)
+
+    return True, label_012, 'good'
 
 
 # 파일명
-image_name = 'capture_01'
+image_name = 'video_4_6'
+# image_name = 'glass_20260'
 start = time.time()  # 시작 시간 저장
-flag, label = trimLabel(image_name)
+flag, label, str = trimLabel(image_name)
 print("time :", time.time() - start)  # 현재시각 - 시작시간 = 실행 시간
-img = cv2.imread('./image/'+image_name+'.jpg')
+print(str)
+img = cv2.imread('./image/video/'+image_name+'.jpg')
 img = cv2.resize(img, dsize=(513, 513), interpolation=cv2.INTER_AREA)
 
 # cv2.imshow('', label*120)
 # cv2.waitKey(0)
 
 if(flag):
-    print(checkAreaOfLiquid(label, 93))
+    # print(checkAreaOfLiquid(label, 93))
     start = time.time()  # 시작 시간 저장
     print(checkVolumnOfLiquid(label, 100)[1])
     print("Volumn time :", time.time() - start)  # 현재시각 - 시작시간 = 실행 시간

@@ -20,7 +20,7 @@ class DeepLabModel(object):
     graph_def = None
     
     # Import graph from frozen graph
-    f=open("./savedModel/xception0921.pb","rb")
+    f=open("./savedModel/xception0922.pb","rb")
     graph_def=tf.GraphDef.FromString(f.read())
 
     if graph_def is None:

@@ -464,7 +464,7 @@ def trimLabel(image_name, seg_map):
     for idx in range(cup_top[1], int(cup_bottom[1]/4 + cup_top[1]/4*3)+1):  # 컵 상단에서 아래로 25%
         cup_row = cnt_cup_copy[np.where(cnt_cup_copy[:, 1] == idx)]
         diameter = cup_row[:, 0].max() - cup_row[:, 0].min()
-        if(diameter == 0 or diameter-upper_diameter > 2):
+        if(diameter < 20 or diameter-upper_diameter > 2):
             upper_diameter = diameter
             upper_diameter_idx = idx
         else:
@@ -474,7 +474,7 @@ def trimLabel(image_name, seg_map):
     cup_upper_height = upper_diameter_idx - cup_top[1]
     print('cup_upper_height: ', cup_upper_height)
     print(cup_upper_height / upper_diameter)
-    if(cup_upper_height / upper_diameter > 0.12):
+    if(cup_upper_height / upper_diameter > 0.21):
         # 컵 윗면이 많이 나온 경우
         return False, label_012, '컵의 정면을 촬영해주세요'
 

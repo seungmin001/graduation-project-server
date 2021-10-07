@@ -3,12 +3,14 @@ import numpy as np
 import time
 from math import dist
 
+# 210929 update
+
 # fluid 의 근사선을 찾기 위해 중심점 위치를 비교할 긴 edge의 개수
 FLUID_APPROX_EDGE_NUM = 3
 
 
 def readLabel(img_name):
-    with open('./txt/video/'+img_name+'.txt', 'r') as file:
+    with open('./txt/sample/white_background/'+img_name+'.txt', 'r') as file:
         output = [line.strip().split(' ') for line in file.readlines()]
 
     # numpy array로 변환
@@ -113,12 +115,16 @@ def trimFluid(line, point, label, cup_upper_height):
     # (correction_height > top) or (correction_height-cup_upper_height>top) 인 경우 액체 label 채워지지 X.
     # correction_height 부터 액체 상단 40%까지만 액체로 label 바꾸던 것 bottom까지 전부 바꾸는 것으로 변경.
     # 액체 label이 두 개 추론된 경우 가운데 쪼개짐 발생하던 것 해결하기 위함.
-    if(correction_height > 250):
-        correction_height = correction_height - cup_upper_height
-    label[correction_height:bottom+1, left:right+1] = 2
-
     # correction_height이 기존 액체 label 상단 점보다 낮게 나왔을 경우(값이 클 경우) 위를 컵 label로 지움 >>>> 윗 내용따라 포함하므로 + ->= - 로 변경
-    label[np.array(np.where(label == 1))[0].min()          :correction_height - cup_upper_height, left:right+1] = 1
+    correction_height = correction_height + cup_upper_height
+    if(correction_height < bottom):
+        label[correction_height:bottom+1, left:right+1] = 2
+        label[np.array(np.where(label == 1))[0].min()
+                       :correction_height, left:right+1] = 1
+    else:
+        label[bottom:correction_height+1, left:right+1] = 2
+        label[np.array(np.where(label == 1))[0].min():bottom, left:right+1] = 1
+
     # 컵 label 컵 윗면 세로 반지름(cup_upper_height)만큼 제외
     label[:np.array(np.where(label == 1))[0].min() +
           cup_upper_height, :] = 0
@@ -202,33 +208,44 @@ def trimFluidFollowCup(label, cnt_cup):
     lower_diameter, lower_diameter_idx = 0, 0
     cnt_cup_copy = cnt_cup.reshape(len(cnt_cup), 2)
     _, _, cup_top, cup_bottom = findMostPoint(cnt_cup)
+    count = 0
     for idx in range(cup_bottom[1], int(cup_top[1]/3*1+cup_bottom[1]/3*2)+1, -1):   # 컵 아래 33%
         cup_row = cnt_cup_copy[np.where(cnt_cup_copy[:, 1] == idx)]
         diameter = cup_row[:, 0].max() - cup_row[:, 0].min()
-        if(diameter-lower_diameter > 2):
+        if(diameter < 20 or diameter-lower_diameter > 2):
             lower_diameter = diameter
             lower_diameter_idx = idx
             # 너무 높은 경우(컵이 둥근 경우)
-            if(lower_diameter_idx <= int(cup_top[1]/10+cup_bottom[1]/10*9)):
-                lower_diameter_idx = 512
+            if(lower_diameter_idx <= int(cup_top[1]/8+cup_bottom[1]/8*7)):
+                lower_diameter_idx = cup_top[1]/10+cup_bottom[1]/10*9
                 break
+            count = 0
         else:
-            break
+            count += 1
+            if(count >= 5):
+                break
 
     # 컵 label이 포함된 행(cup_width)에서 액체가 있는 행을 for문으로 돌아가며 값 변경 >>>>> 이 부분을.. 수정해야할지? 액체 segmentation 추가 학습 후에 고려해볼 것.
     fluid_height = np.where(label == 2)[0]
-    fluid_height = np.unique(fluid_height)
-    for i in fluid_height:
+    fluid_height = fluid_height.min()
+    cup_height = np.where(label == 1)[0]
+    cup_height = np.unique(cup_height)
+    for i in cup_height:
         cup_width = np.array(np.where(label[i] == 1))
         if len(cup_width[0]) == 0:
             continue
-        elif i >= lower_diameter_idx:
-            # 유효한 컵 밑면의 지름(lower_diameter_idx)을 구한 경우 그보다 밑의(값이 큰) 액체는 컵으로 변환
-            label[i, cup_width.min():cup_width.max()+1] = 1
+        elif i >= fluid_height:
+            if i >= lower_diameter_idx:
+                # 유효한 컵 밑면의 지름(lower_diameter_idx)을 구한 경우 그보다 밑의(값이 큰) 액체는 컵으로 변환
+                label[i, cup_width.min():cup_width.max()+1] = 1
+            else:
+                label[i, cup_width.min():cup_width.max()+1] = 2
         else:
             # 컵 액체로 꽉 찬 경우(len(cup_width[0]) < 1) 제외
-            label[i, cup_width.min():cup_width.max()+1] = 2
+            label[i, cup_width.min():cup_width.max()+1] = 1
 
+    fluid_height = np.where(label == 2)[0]
+    fluid_height = np.unique(fluid_height)
     # if want to remove the bottom of the cup >>>>> 요기도 추가 학습 후 고려해볼 것. 액체 추론이 제대로 안 될 경우 아래가 너무 많이 지워짐..
     cup_height = np.where(label == 1)[0]
     cup_height = np.unique(cup_height)
@@ -414,8 +431,8 @@ def calcalateValidHeight(volumn, bottom_radius, virtual_height):
 
 def trimLabel(image_name):
     # 이미지 읽기
-    print('./image/video/'+image_name+'.jpg')
-    img = cv2.imread('./image/video/'+image_name+'.jpg')
+    print('./image/sample/white_background/'+image_name+'.jpg')
+    img = cv2.imread('./image/sample/white_background/'+image_name+'.jpg')
     img = cv2.resize(img, dsize=(513, 513),
                      interpolation=cv2.INTER_AREA)
     # 선명도 올리는데 이용
@@ -449,6 +466,15 @@ def trimLabel(image_name):
     label_cup_canny = auto_canny(label_cup)
     contours_cup, _ = cv2.findContours(
         label_cup_canny, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+
+    # # 길이 가장 긴(면적이큰) 5개의 edge 중심점과 함께 시각적 show
+    # for i in range(0, len(contours_cup)):
+    #     img_ = img.copy()
+    #     cv2.drawContours(img_, contours_cup[i], -1,
+    #                      color=(0, 230, 230), thickness=cv2.FILLED)
+    #     cv2.imshow('', img_)
+    #     cv2.waitKey(0)
+
     # cup 개수 확인 후 2개 이상일 경우 false return
     # label 변경 시(컵2개이상인경우) return. 컵 여러 개인 경우 segmentation 또한 일그러지기 때문에 추가 trim 하는 대신 return 하기로 결정.
     if(len(contours_cup) >= 4):
@@ -462,7 +488,8 @@ def trimLabel(image_name):
 
     # 컵 label이 뾰족해 이미지 상단과(액체때문) 하단에(가까워서) 닿은 경우
     # cup edge인 cun_cup이 좌,우로 쪼개지므로 해당 상황에서의 후처리 방지.(안 할 경우 액체label 사라짐.)
-    _, _, cup_top, cup_bottom = findMostPoint(cnt_cup)
+    cup_left, cup_right, cup_top, cup_bottom = findMostPoint(cnt_cup)
+    cup_top = np.array(cup_top)
     if(cup_top[1] == 0 and cup_bottom[1] == 512):
         return False, label_012, '컵을 멀리서 촬영해주세요.'
 
@@ -471,20 +498,32 @@ def trimLabel(image_name):
     # upper_diameter: 윗면의 지름, upper_diameter_idx: 윗면 지름의 높이값 idx
     upper_diameter, upper_diameter_idx = 0, 0
     cnt_cup_copy = cnt_cup.reshape(len(cnt_cup), 2)
+    count, delete = 0, False
     for idx in range(cup_top[1], int(cup_bottom[1]/4 + cup_top[1]/4*3)+1):  # 컵 상단에서 아래로 25%
         cup_row = cnt_cup_copy[np.where(cnt_cup_copy[:, 1] == idx)]
         diameter = cup_row[:, 0].max() - cup_row[:, 0].min()
-        if(diameter < 20 or diameter-upper_diameter > 2):
+        if(diameter < 50):
+            # 따라지는 액체로 인해 컵이 위로 뾰족하게 인식되는 경우.
+            label_012[idx, :] = 0
+            delete = True
+        elif(diameter-upper_diameter > 2):
             upper_diameter = diameter
             upper_diameter_idx = idx
+            count = 0
+            if(delete):
+                cup_top[1] = upper_diameter_idx
+                delete = False
         else:
-            break
+            count += 1
+            if(count >= 5):
+                break
 
     # 컵 위에서 촬영하는 경우 제한. (컵 윗면의 세로반지름/가로반지름이 긴 경우)
     cup_upper_height = upper_diameter_idx - cup_top[1]
+
     print('cup_upper_height: ', cup_upper_height)
     print(cup_upper_height / upper_diameter)
-    if(cup_upper_height / upper_diameter > 0.21):
+    if(cup_upper_height / upper_diameter > 0.25):
         # 컵 윗면이 많이 나온 경우
         return False, label_012, '컵의 정면을 촬영해주세요'
 
@@ -560,6 +599,18 @@ def trimLabel(image_name):
     fluid_left, fluid_right, _, _ = findMostPoint(cnt_fluid)
     fluid_middle_top, _ = findMiddlePoint(
         cnt_fluid, int((fluid_left[0]+fluid_right[0])/2))
+    fluid_middle_top = np.array(fluid_middle_top)
+
+    fluid = np.array(np.where(label_012 == 2))
+    fluid_top_height = fluid[0].min()
+    idx = np.where(fluid[0] == fluid_top_height)
+
+    if len(idx[0]) == 1:
+        fluid_middle_top[0], fluid_middle_top[1] = int(
+            (cup_left[0]+cup_right[0])/2), fluid[0][idx]
+    else:
+        fluid_middle_top[0], fluid_middle_top[1] = int(
+            (cup_left[0]+cup_right[0])/2), fluid[0][idx[0][0]]
 
     if(fluid_middle_top[1] >= int(cup_top[1]/2 + cup_bottom[1]/2)):
         # 컵 윗면이 많이 나오지 X (정면에 가까움) + 컵의 반 이하로 따라진 경우 상단 25% 지움
@@ -653,13 +704,13 @@ def trimLabel(image_name):
 
 
 # 파일명
-image_name = 'video_11_11'
-# image_name = 'glass_20260'
+image_name = 'video2_14'
+# image_name = 'gdlass_20260'
 start = time.time()  # 시작 시간 저장
 flag, label, str = trimLabel(image_name)
 print("time :", time.time() - start)  # 현재시각 - 시작시간 = 실행 시간
 print(str)
-img = cv2.imread('./image/video/'+image_name+'.jpg')
+img = cv2.imread('./image/sample/white_background/'+image_name+'.jpg')
 img = cv2.resize(img, dsize=(513, 513), interpolation=cv2.INTER_AREA)
 
 cv2.imshow('', img)

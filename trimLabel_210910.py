@@ -5,10 +5,12 @@ from math import hypot
 # fluid 의 근사선을 찾기 위해 중심점 위치를 비교할 긴 edge의 개수
 FLUID_APPROX_EDGE_NUM = 3
 
+
 def get_dist(point_a, point_b):
     x1, y1 = point_a
     x2, y2 = point_b
     return hypot(x1-x2, y1-y2)
+
 
 def arr2img(arr):
     # 0 -> [1,0,0]
@@ -87,7 +89,7 @@ def trimFluid(line, point, label, cup_upper_height):
         count = count+1
     correction_height = int(sum/count)
 
-    # correction_height 보다 기존 액체 label이 높을 경우 지움 
+    # correction_height 보다 기존 액체 label이 높을 경우 지움
     if(top < correction_height):
         label[top:correction_height, left:right+1] = 1
 
@@ -96,13 +98,15 @@ def trimFluid(line, point, label, cup_upper_height):
     # (correction_height > top) or (correction_height-cup_upper_height>top) 인 경우 액체 label 채워지지 X.
     # correction_height 부터 액체 상단 40%까지만 액체로 label 바꾸던 것 bottom까지 전부 바꾸는 것으로 변경.
     # 액체 label이 두 개 추론된 경우 가운데 쪼개짐 발생하던 것 해결하기 위함.
-    if(correction_height > 250):
-        correction_height = correction_height - cup_upper_height
-    label[correction_height:bottom+1, left:right+1] = 2
-
     # correction_height이 기존 액체 label 상단 점보다 낮게 나왔을 경우(값이 클 경우) 위를 컵 label로 지움 >>>> 윗 내용따라 포함하므로 + ->= - 로 변경
-    label[np.array(np.where(label == 1))[0].min()
-                   :correction_height - cup_upper_height, left:right+1] = 1
+    correction_height = correction_height + cup_upper_height
+    if(correction_height < bottom):
+        label[correction_height:bottom+1, left:right+1] = 2
+        label[np.array(np.where(label == 1))[0].min()              :correction_height, left:right+1] = 1
+    else:
+        label[bottom:correction_height+1, left:right+1] = 2
+        label[np.array(np.where(label == 1))[0].min():bottom, left:right+1] = 1
+
     # 컵 label 컵 윗면 세로 반지름(cup_upper_height)만큼 제외
     label[:np.array(np.where(label == 1))[0].min() +
           cup_upper_height, :] = 0
@@ -150,7 +154,8 @@ def checkCupNum(contours_cup, label_012):
                 continue
             x = int(M1['m10']/M1['m00'])
             y = int(M1['m01']/M1['m00'])
-            M = np.append(M, np.array([int(get_dist([x, y], [250, 250]))]), axis=0)
+            M = np.append(M, np.array(
+                [int(get_dist([x, y], [250, 250]))]), axis=0)
 
         # 거리순으로 인덱스 정렬 후 중심과 가장 가까운 contour의 좌우상하값 구하기
         idx = M.argsort()
@@ -184,37 +189,47 @@ def trimFluidFollowCup(label, cnt_cup):
     lower_diameter, lower_diameter_idx = 0, 0
     cnt_cup_copy = cnt_cup.reshape(len(cnt_cup), 2)
     _, _, cup_top, cup_bottom = findMostPoint(cnt_cup)
+    count = 0
     for idx in range(cup_bottom[1], int(cup_top[1]/3*1+cup_bottom[1]/3*2)+1, -1):   # 컵 아래 33%
         cup_row = cnt_cup_copy[np.where(cnt_cup_copy[:, 1] == idx)]
         diameter = cup_row[:, 0].max() - cup_row[:, 0].min()
-        if(diameter-lower_diameter > 2):
+        if(diameter < 20 or diameter-lower_diameter > 2):
             lower_diameter = diameter
             lower_diameter_idx = idx
             # 너무 높은 경우(컵이 둥근 경우)
-            if(lower_diameter_idx <= int(cup_top[1]/10+cup_bottom[1]/10*9)):
-                lower_diameter_idx = 512
+            if(lower_diameter_idx <= int(cup_top[1]/8+cup_bottom[1]/8*7)):
+                lower_diameter_idx = cup_top[1]/10+cup_bottom[1]/10*9
                 break
         else:
-            break
+            count += 1
+            if(count >= 5):
+                break
 
     # 컵 label이 포함된 행(cup_width)에서 액체가 있는 행을 for문으로 돌아가며 값 변경 >>>>> 이 부분을.. 수정해야할지? 액체 segmentation 추가 학습 후에 고려해볼 것.
     fluid_height = np.where(label == 2)[0]
-    fluid_height = np.unique(fluid_height)
-    for i in fluid_height:
+    fluid_height = fluid_height.min()
+    cup_height = np.where(label == 1)[0]
+    cup_height = np.unique(cup_height)
+    for i in cup_height:
         cup_width = np.array(np.where(label[i] == 1))
         if len(cup_width[0]) == 0:
             continue
-        elif i >= lower_diameter_idx:
-            # 유효한 컵 밑면의 지름(lower_diameter_idx)을 구한 경우 그보다 밑의(값이 큰) 액체는 컵으로 변환
-            label[i, cup_width.min():cup_width.max()+1] = 1
+        elif i >= fluid_height:
+            if i >= lower_diameter_idx:
+                # 유효한 컵 밑면의 지름(lower_diameter_idx)을 구한 경우 그보다 밑의(값이 큰) 액체는 컵으로 변환
+                label[i, cup_width.min():cup_width.max()+1] = 1
+            else:
+                label[i, cup_width.min():cup_width.max()+1] = 2
         else:
             # 컵 액체로 꽉 찬 경우(len(cup_width[0]) < 1) 제외
-            label[i, cup_width.min():cup_width.max()+1] = 2
+            label[i, cup_width.min():cup_width.max()+1] = 1
 
+    fluid_height = np.where(label == 2)[0]
+    fluid_height = np.unique(fluid_height)
     # if want to remove the bottom of the cup >>>>> 요기도 추가 학습 후 고려해볼 것. 액체 추론이 제대로 안 될 경우 아래가 너무 많이 지워짐..
     cup_height = np.where(label == 1)[0]
     cup_height = np.unique(cup_height)
-    
+
     if((len(fluid_height) > 0) and (len(cup_height) > 0)):
         if (cup_height.max() > fluid_height.max()):
             for i in range(fluid_height.max()+1, cup_height.max()+1):
@@ -248,7 +263,7 @@ def checkVolumnOfLiquid(label, ratio):
         # 액체 없는 경우 컵 밑면 == 컵 밑면 근데 액체 없으면 일정 비율만큼 들어왔는지 검사할 필요가 X,,
         # cup_bottom_height = cup[0].max()
         # cup_bottom = cup[1, np.where(cup[0] == cup_bottom_height)[0]]
-        return label, False, "액체가 인식되지 않았습니다","no"
+        return label, False, "액체가 인식되지 않았습니다", "no"
     else:
         # 액체 있는 경우 컵 밑면 == 액체 밑면
         cup_bottom_height = fluid[0].max()
@@ -259,24 +274,25 @@ def checkVolumnOfLiquid(label, ratio):
     _, _, valid_height = calculateVolumnByPart(
         cup, fluid, cup_top_height, cup_bottom_height, fluid_top_height, ratio, 5)
 
-   
     # print('valid_cup_volumn: ', valid_cup_volumn)
     # print('fluid_volumn: ', fluid_volumn)
     # print(fluid_volumn/valid_cup_volumn*100)
-    
-    print("valid_fluid_row, fluid_top_height : ",valid_height,fluid_top_height)
-    
-    lineLoc = [valid_height,cup[1].min(),cup[1].max()]
+
+    print("valid_fluid_row, fluid_top_height : ",
+          valid_height, fluid_top_height)
+
+    lineLoc = [valid_height, cup[1].min(), cup[1].max()]
     lineLoc = [int(x) for x in lineLoc]
 
-    label[int(valid_height)-3 : int(valid_height)+3, cup[1].min():cup[1].max()] = 3
+    label[int(valid_height)-3: int(valid_height) +
+          3, cup[1].min():cup[1].max()] = 3
 
     if((fluid_top_height <= valid_height+4) and (fluid_top_height >= valid_height-4)):
-        return lineLoc, True, '적정량을 따랐습니다. :) 잠시 기다려주세요',"good"
+        return lineLoc, True, '적정량을 따랐습니다. :) 잠시 기다려주세요', "good"
     elif (fluid_top_height > valid_height+4):
-        return lineLoc, False, '재료를 더 따라주세요',"under"
+        return lineLoc, False, '재료를 더 따라주세요', "under"
     else:
-        return lineLoc, True, '적정량을 초과하였습니다',"over"
+        return lineLoc, True, '적정량을 초과하였습니다', "over"
 
 
 def calculateVolumnByPart(cup, fluid, cup_h_top, cup_h_bottom, fluid_h_top, ratio, part_num):
@@ -420,7 +436,7 @@ def trimLabel(image_name, seg_map):
                                      interpolation=cv2.INTER_AREA)
 
     # 라벨 읽기
-    label_012 = seg_map # readLabel(image_name)
+    label_012 = seg_map  # readLabel(image_name)
     label = arr2img(label_012)
     label_gray = cv2.cvtColor(label*120, cv2.COLOR_RGB2GRAY)
 
@@ -452,7 +468,8 @@ def trimLabel(image_name, seg_map):
 
     # 컵 label이 뾰족해 이미지 상단과(액체때문) 하단에(가까워서) 닿은 경우
     # cup edge인 cun_cup이 좌,우로 쪼개지므로 해당 상황에서의 후처리 방지.(안 할 경우 액체label 사라짐.)
-    _, _, cup_top, cup_bottom = findMostPoint(cnt_cup)
+    cup_left, cup_right, cup_top, cup_bottom = findMostPoint(cnt_cup)
+    cup_top = np.array(cup_top)
     if(cup_top[1] == 0 and cup_bottom[1] == 512):
         return False, label_012, '컵을 멀리서 촬영해주세요'
 
@@ -461,20 +478,32 @@ def trimLabel(image_name, seg_map):
     # upper_diameter: 윗면의 지름, upper_diameter_idx: 윗면 지름의 높이값 idx
     upper_diameter, upper_diameter_idx = 0, 0
     cnt_cup_copy = cnt_cup.reshape(len(cnt_cup), 2)
+    count, delete = 0, False
     for idx in range(cup_top[1], int(cup_bottom[1]/4 + cup_top[1]/4*3)+1):  # 컵 상단에서 아래로 25%
         cup_row = cnt_cup_copy[np.where(cnt_cup_copy[:, 1] == idx)]
         diameter = cup_row[:, 0].max() - cup_row[:, 0].min()
-        if(diameter < 20 or diameter-upper_diameter > 2):
+        if(diameter < 50):
+            # 따라지는 액체로 인해 컵이 위로 뾰족하게 인식되는 경우.
+            label_012[idx, :] = 0
+            delete = True
+        elif(diameter-upper_diameter > 2):
             upper_diameter = diameter
             upper_diameter_idx = idx
+            count = 0
+            if(delete):
+                cup_top[1] = upper_diameter_idx
+                delete = False
         else:
-            break
+            count += 1
+            if(count >= 5):
+                break
 
     # 컵 위에서 촬영하는 경우 제한. (컵 윗면의 세로반지름/가로반지름이 긴 경우)
     cup_upper_height = upper_diameter_idx - cup_top[1]
+
     print('cup_upper_height: ', cup_upper_height)
     print(cup_upper_height / upper_diameter)
-    if(cup_upper_height / upper_diameter > 0.21):
+    if(cup_upper_height / upper_diameter > 0.25):
         # 컵 윗면이 많이 나온 경우
         return False, label_012, '컵의 정면을 촬영해주세요'
 
@@ -532,13 +561,25 @@ def trimLabel(image_name, seg_map):
     # 가장 긴 contour를 liquid의 contour로 가정
     cnt_fluid = []
     for i in contours_fluid:
-        if (len(i) >= len(cnt_fluid)):
+        if (len(i) >= len(cnt_fluid)):  # TODO : max 로 찾을 수 있지 않을까
             cnt_fluid = i
 
     # 액체의 극점, middle_top/bottom 찾기 (이 때, middle_top[1] < middle_bottom[1])
     fluid_left, fluid_right, _, _ = findMostPoint(cnt_fluid)
     fluid_middle_top, _ = findMiddlePoint(
         cnt_fluid, int((fluid_left[0]+fluid_right[0])/2))
+    fluid_middle_top = np.array(fluid_middle_top)
+
+    fluid = np.array(np.where(label_012 == 2))
+    fluid_top_height = fluid[0].min()
+    idx = np.where(fluid[0] == fluid_top_height)
+
+    if len(idx[0]) == 1:
+        fluid_middle_top[0], fluid_middle_top[1] = int(
+            (cup_left[0]+cup_right[0])/2), fluid[0][idx]
+    else:
+        fluid_middle_top[0], fluid_middle_top[1] = int(
+            (cup_left[0]+cup_right[0])/2), fluid[0][idx[0][0]]
 
     if(fluid_middle_top[1] >= int(cup_top[1]/2 + cup_bottom[1]/2)):
         # 컵 윗면이 많이 나오지 X (정면에 가까움) + 컵의 반 이하로 따라진 경우 상단 25% 지움

@@ -292,7 +292,7 @@ def checkVolumnOfLiquid(label, ratio):
     elif (fluid_top_height > valid_height+4):
         return lineLoc, False, '재료를 더 따라주세요', "under"
     else:
-        return lineLoc, True, '적정량을 초과하였습니다', "over"
+        return lineLoc, False, '적정량을 초과하였습니다. 적정선에 맞도록 재료를 덜어주세요', "over"
 
 
 def calculateVolumnByPart(cup, fluid, cup_h_top, cup_h_bottom, fluid_h_top, ratio, part_num):

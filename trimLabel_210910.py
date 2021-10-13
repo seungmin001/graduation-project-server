@@ -447,6 +447,11 @@ def trimLabel(image_name, seg_map):
     label = arr2img(label_012)
     label_gray = cv2.cvtColor(label*120, cv2.COLOR_RGB2GRAY)
 
+    # cup 이 없는 경우 처리
+    cup = np.array(np.where((seg_map == 1) | (seg_map == 2)))
+    if (cup.size == 0):
+        print(cup.size,"\n",cup)
+        return False, label_012, "컵이 인식되지 않았습니다"
     # cup만 segmentation하도록 label값 조정
     # cup: 70, liquid: 14, background: 36
     # 액체가 무조건 컵 안에 담겨있을 것으로 가정함

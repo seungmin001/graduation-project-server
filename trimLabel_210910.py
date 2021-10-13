@@ -290,9 +290,13 @@ def checkVolumnOfLiquid(label, ratio):
     label[int(valid_height)-3: int(valid_height) +
           3, cup[1].min():cup[1].max()] = 3
 
-    if((fluid_top_height <= valid_height+4) and (fluid_top_height >= valid_height-4)):
+    # 적정량 기준 : 컵 길이의 10%
+    allow_ref = int((cup[0].max() - cup[0].min()) * 0.08 )
+    print("allow_ref",allow_ref)
+    print(" valid+allowref : ",valid_height+allow_ref," valid-allowref : ",valid_height-allow_ref)
+    if((fluid_top_height <= valid_height+ allow_ref) and (fluid_top_height >= valid_height- allow_ref)): # 높음 / 낮음
         return lineLoc, True, '적정량을 따랐습니다. :) 잠시 기다려주세요', "good"
-    elif (fluid_top_height > valid_height+4):
+    elif (fluid_top_height > valid_height+ allow_ref):
         return lineLoc, False, '재료를 더 따라주세요', "under"
     else:
         return lineLoc, False, '적정량을 초과하였습니다. 적정선에 맞도록 재료를 덜어주세요', "over"

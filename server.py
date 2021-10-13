@@ -32,11 +32,11 @@ def handle_request():
     # 경계선 얻어내기
     # issuccess : 인식 후처리에서 성공/실패 , msg : status에 띄울 말
     issuccess, seg, msg = trimLabel(filename,seg_map)
+    ingName = request.form["ingName"]
     if not issuccess:
-        return {"success":"false","msg":msg}
+        return {"success":"false","msg":msg,"ingName":ingName}
     
     # check fluid
-    ingName = request.form["ingName"]
     requiredRatio = request.form["ratio"]
     print("requiredRatio",requiredRatio)
     # isCheckable : ratio 측정 성공여부 및 넘김 여부 , ratioMsg : 해당 결과 설명문

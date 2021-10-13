@@ -32,7 +32,9 @@ def auto_canny(image, sigma=0.33):
     return cv2.Canny(image, lower, upper)
 
 
-def findMostPoint(cnt):
+def findMostPoint(cnt):  # cnt는 한 윤곽선 [0]점/[0]/[0,1]xy
+    cnt = np.array(cnt)
+    # 모든 x값에 대하여 x가 가장 작은 점 [x,y]
     leftmost = tuple(cnt[cnt[:, :, 0].argmin()][0])
     rightmost = tuple(cnt[cnt[:, :, 0].argmax()][0])
     topmost = tuple(cnt[cnt[:, :, 1].argmin()][0])
@@ -48,8 +50,8 @@ def findMiddlePoint(cnt, middleX):
     top = [512, 512]
 
     for i in cnt_middle[0]:
-        print(cnt[i][0][1])
-        print(bottom[1])
+        # print(cnt[i][0][1])
+        # print(bottom[1])
         if(cnt[i][0][1] <= top[1]):
             top = cnt[i][0]
         if(cnt[i][0][1] >= bottom[1]):
@@ -281,6 +283,7 @@ def checkVolumnOfLiquid(label, ratio):
     print("valid_fluid_row, fluid_top_height : ",
           valid_height, fluid_top_height)
 
+    # 어플 화면 상 선 출력 위치 [기준 row, 왼쪽 col, 오른쪽 col]
     lineLoc = [valid_height, cup[1].min(), cup[1].max()]
     lineLoc = [int(x) for x in lineLoc]
 
@@ -448,13 +451,13 @@ def trimLabel(image_name, seg_map):
         # 컵 부분만 mask해 배경에 수평edge 있는지 확인.
         label_cup = label_gray
     else:
-        # 액체 있는 경우(!0)
+        # 액체 있는 경우(!0) # 액체일 경우 cup label으로 변환, 아닐 경우 label 그대로
         label_cup = np.where(label_gray == 14, 70, label_gray)
 
     # cup segmentation canny -> contour
     label_cup_canny = auto_canny(label_cup)
     contours_cup, _ = cv2.findContours(
-        label_cup_canny, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+        label_cup_canny, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)  # 첫번째 차원 : 각 윤곽선 , 두번째 : 각 점 , 3 : 무조건 [0],4[0,1] : x[0]y[1] / contours[0][0] =  [[116  11]]
     # cup 개수 확인 후 2개 이상일 경우 false return
     # label 변경 시(컵2개이상인경우) return. 컵 여러 개인 경우 segmentation 또한 일그러지기 때문에 추가 trim 하는 대신 return 하기로 결정.
     if(len(contours_cup) >= 4):

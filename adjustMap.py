@@ -103,7 +103,10 @@ def adjustFluid(label):
 
     # 가장 긴 행 기준 조금만 낮추고 진행? (위 동그란 부분 없애는 뜻으로)
     # np.bincount(arr) : 주어진 배열 값 중 나타난 횟수를 값과 같은 index에 저장
-    longestRow=np.argmax(np.bincount(fluid[0]))
+    binC=np.bincount(fluid[0])
+    binC=np.argpartition(binC, -20)[-20:] # 상위 20개 값 추출
+    longestRow=int(np.min(binC)) # 가장 상단 행 선택
+
     # TODO: longestRow and fluidTop의 일정비율로 낮추기? 
     semiTop = int((fluidTop+longestRow*2)/3)
     for i in range(fluidTop,semiTop+1): # 가장 긴 행 만큼 낮추기 # longestRow

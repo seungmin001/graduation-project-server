@@ -7,7 +7,11 @@ def adjustCup(label):
     l = label.copy()
 
     cup = np.array(np.where((l == 1) | (l == 2)))
+    if cup[0].size==0:
+        return l,False,"컵이 인식되지 않았습니다"
     fluid = np.array(np.where(l == 2))
+    if fluid[0].size==0:
+        return l, False, "액체가 인식되지 않았습니다"
 
     # 컵 상단 지름 계산
 
@@ -86,7 +90,7 @@ def adjustCup(label):
         for j in colInfo:
             l[i][j]=0 # 배경으로 치환
 
-    return l
+    return l,True,"good"
 
 
 def adjustFluid(label):
@@ -94,8 +98,8 @@ def adjustFluid(label):
     labelCopy = label.copy()
     fluid = np.array(np.where(labelCopy == 2))
     # 액체 없으면 인자 그대로 반환하며 종료
-    if len(fluid[0]) == 0:
-        return label
+    if fluid[0].size == 0:
+        return label, False, "액체가 인식되지 않았습니다"
     fluidTop = fluid[0].min()  # 행 값 중 최소값
 
     cup = np.array(np.where((labelCopy == 1) | (labelCopy == 2)))
@@ -122,7 +126,7 @@ def adjustFluid(label):
         for j in range(colInfo.min(),colInfo.max()+1): # 액체로 변환, min max로 해야 구멍이 안 생김
             labelCopy[i][j] = 2
     
-    return labelCopy
+    return labelCopy, True, "액체 인식 성공"
 
 
 def readLabel(img_name):

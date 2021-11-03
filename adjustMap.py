@@ -113,13 +113,13 @@ def adjustFluid(label):
 
     # TODO: longestRow and fluidTop의 일정비율로 낮추기? 
     semiTop = int((fluidTop+longestRow*2)/3)
-    for i in range(fluidTop,semiTop+1): # 가장 긴 행 만큼 낮추기 # longestRow
+    for i in range(fluidTop,semiTop): # 가장 긴 행 만큼 낮추기 # longestRow
         colInfo = np.array(np.where(labelCopy[i] == 2))  # 이 row에서 label 2인 col arr
         if colInfo.size==0: # 
             continue
         for j in colInfo: # 컵 치환
             labelCopy[i][j] = 1
-    for i in range(semiTop+1,fluidBottom+1): # 컵 최하단까지 액체 늘리기
+    for i in range(semiTop,fluidBottom+1): # 컵 최하단까지 액체 늘리기
         colInfo = np.array(np.where(labelCopy[i] == 1))  # 이 row에서 label 1인 col arr
         if colInfo.size==0:
             continue

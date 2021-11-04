@@ -105,6 +105,19 @@ def adjustFluid(label):
     cup = np.array(np.where((labelCopy == 1) | (labelCopy == 2)))
     fluidBottom = cup[0].max() # 컵의 최하단을 액체의 밑바닥으로 변경
 
+    # for i in range(fluidTop,int(fluidTop+upHalfHeight/3)): # 액체 상단 윗면 세로 반지름/3 만큼 낮추기 (액체 -> 컵)
+    #     colInfo = np.array(np.where(labelCopy[i] == 2))  # 이 row에서 label 2인 col arr
+    #     if colInfo.size==0: # 
+    #         continue
+    #     for j in colInfo: # 컵 치환
+    #         labelCopy[i][j] = 1
+    # for i in range(int(fluidTop+upHalfHeight/3),fluidBottom+1): # 컵 최하단까지 액체 늘리기
+    #     colInfo = np.array(np.where(labelCopy[i] == 1))  # 이 row에서 label 1인 col arr
+    #     if colInfo.size==0:
+    #         continue
+    #     for j in colInfo: # 액체로 변환
+    #         labelCopy[i][j] = 2
+
     # 가장 긴 행 기준 조금만 낮추고 진행? (위 동그란 부분 없애는 뜻으로)
     # np.bincount(arr) : 주어진 배열 값 중 나타난 횟수를 값과 같은 index에 저장
     binC=np.bincount(fluid[0])
@@ -165,10 +178,8 @@ def experimentTxt():
         if s == "q":
             return
         label = readLabel(s)
-        newLabel = adjustCup(label)
-        
-        newLabel = adjustFluid(newLabel)
-        
+        newLabel, isOk, msg = adjustCup(label)
+        newLabel, isOk, msg = adjustFluid(newLabel)
 
         showBlendedImage(label, s, "1")
         showBlendedImage(newLabel,s,"2")

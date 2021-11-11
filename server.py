@@ -18,19 +18,22 @@ def limit_addr():
     if request.remote_addr != "210.218.145.162":
         abort(403)
 
-# 기본 경로 요청 처리
+# 기본 경로 POST 요청 처리
 @app.route('/', methods=['POST'])
 def handle_request():
-    imagefile= request.files['image'] # request msg의 image형식 파일
-    filename = werkzeug.utils.secure_filename(imagefile.filename) # filename 안전하게 추출
+    # request msg의 image형식 파일
+    imagefile= request.files['image']
+    # filename 안전하게 추출
+    filename = werkzeug.utils.secure_filename(imagefile.filename) 
     print("Received image File name : "+ imagefile.filename)
-    imagefile.save(filename) # image file로 save
+    # image file로 save
+    imagefile.save(filename) 
 
-    # 추론 실행 (segmentation class 배열 반환)
+    # 추론 실행 (segmentation label 배열 반환)
     resized_im,seg_map = inference.run_model(filename, model) 
-    # return {"success":"true","segmap":seg_map.tolist(),"msg":"실험입니다.", "ratio":"false"}
-    # 경계선 얻어내기
-    # issuccess : 인식 후처리에서 성공/실패 , msg : status에 띄울 말
+
+    # label 다듬는 후처리 진행
+    # issuccess : 인식 후처리에서 성공/실패 , msg : 후처리 상황 메시지
     issuccess, seg, msg = trimLabel(filename,seg_map)
     ingName = request.form["ingName"]
     if not issuccess:
@@ -38,19 +41,21 @@ def handle_request():
     
     # check fluid
     requiredRatio = request.form["ratio"]
-    print("requiredRatio",requiredRatio)
-    # isCheckable : ratio 측정 성공여부 및 넘김 여부 , ratioMsg : 해당 결과 설명문
+    print("요청 비율 : ",requiredRatio)
+    # 요청 비율만큼 채워졌는 지 확인
+    # lineLoc : 어플에 띄울 선 위치 , isCheckable : ratio 측정 성공여부 , ratioMsg : 해당 결과 설명문 , ratioStatus : 
     lineLoc, isCheckable, ratioMsg, ratioStatus = checkVolumnOfLiquid(seg,float(requiredRatio))
+
+    # 추론에 사용한 사진 삭제
+    if os.path.exists(filename):
+        os.remove(filename)
     
+    # ratio 성공여부에 따라 ratio 값을 다르게 해 어플 내 오류 방지
     if isCheckable:
         return {"ingName":ingName,"success":"true","segmap":lineLoc,"msg":msg, "ratio":"true", "ratioMsg":ratioMsg,"ratioStatus":ratioStatus}
     else :
         return {"ingName":ingName,"success":"true","segmap":lineLoc,"msg":msg, "ratio":"false", "ratioMsg":ratioMsg,"ratioStatus":ratioStatus}
-    # segmentation 완료 후 저장한 사진 삭제
-    if os.path.exists(filename):
-        os.remove(filename)
 
-    return {"success":"true","segmap":seg.tolist(),"msg":msg, "ratio":"false"} # json data형태로 response msg 보냄.
 
 if __name__ == "__main__":
     model=DeepLabModel('') # 서버 실행 시 모델 미리 로드

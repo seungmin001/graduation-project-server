@@ -2,7 +2,7 @@ from flask import Flask, request, abort
 import werkzeug
 import inference
 from deeplab import DeepLabModel
-from trimLabel_210910 import trimLabel,checkAreaOfLiquid, checkVolumnOfLiquid
+from trimLabel import trimLabel,checkVolumnOfLiquid
 import os
 
 # 특정 파일 추론 시

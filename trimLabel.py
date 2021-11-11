@@ -278,11 +278,7 @@ def checkVolumnOfLiquid(label, ratio):
     _, _, valid_height = calculateVolumnByPart(
         cup, fluid, cup_top_height, cup_bottom_height, fluid_top_height, ratio, 5)
 
-    # print('valid_cup_volumn: ', valid_cup_volumn)
-    # print('fluid_volumn: ', fluid_volumn)
-    # print(fluid_volumn/valid_cup_volumn*100)
-
-    print("valid_fluid_row, fluid_top_height : ",
+    print("계산된 적정 row, 액체 상단 row : ",
           valid_height, fluid_top_height)
 
     # 어플 화면 상 선 출력 위치 [기준 row, 왼쪽 col, 오른쪽 col]
@@ -294,11 +290,11 @@ def checkVolumnOfLiquid(label, ratio):
 
     # 적정량 기준 : 컵 길이의 10%
     allow_ref = int((cup[0].max() - cup[0].min()) * 0.05 )
-    print("allow_ref",allow_ref)
-    print(" valid+allowref : ",valid_height+allow_ref," valid-allowref : ",valid_height-allow_ref)
-    if((fluid_top_height <= valid_height+ allow_ref) and (fluid_top_height >= valid_height- allow_ref)): # 높음 / 낮음
+    print("적정 row 범위 : ",allow_ref*2)
+    print(" 허용 하위 row : ",valid_height+allow_ref*1.2," / 허용 상위 row : ",valid_height-allow_ref*0.8)
+    if((fluid_top_height <= valid_height+ allow_ref*1.2) and (fluid_top_height >= valid_height- allow_ref*0.8)): # 높음 / 낮음
         return lineLoc, True, '적정량을 따랐습니다. :) 잠시 기다려주세요', "good"
-    elif (fluid_top_height > valid_height+ allow_ref):
+    elif (fluid_top_height > valid_height+ allow_ref*1.2):
         return lineLoc, False, '재료를 더 따라주세요', "under"
     else:
         return lineLoc, False, '적정량을 초과하였습니다. 적정선에 맞도록 재료를 덜어주세요', "over"

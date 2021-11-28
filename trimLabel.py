@@ -210,34 +210,26 @@ def trimFluidFollowCup(label, cnt_cup):
                 break
 
     # 컵 label이 포함된 행(cup_width)에서 액체가 있는 행을 for문으로 돌아가며 값 변경 >>>>> 이 부분을.. 수정해야할지? 액체 segmentation 추가 학습 후에 고려해볼 것.
-    fluid_height = np.where(label == 2)[0]
-    fluid_height = fluid_height.min()
+    fluid_range = np.where(label == 2)[0]
+    fluid_height = fluid_range.min()
     cup_height = np.where(label == 1)[0]
     cup_height = np.unique(cup_height)
-    for i in cup_height:
+    for i in range(cup_height.min(), cup_height.max()+1):
         cup_width = np.array(np.where(label[i] == 1))
-        if len(cup_width[0]) == 0:
-            continue
-        elif i >= fluid_height:
+        if i >= fluid_height:
             if i >= lower_diameter_idx:
-                # 유효한 컵 밑면의 지름(lower_diameter_idx)을 구한 경우 그보다 밑의(값이 큰) 액체는 컵으로 변환
-                label[i, cup_width.min():cup_width.max()+1] = 1
+                # 유효한 컵 밑면의 지름(lower_diameter_idx)을 구한 경우 그보다 밑의(값이 큰) 액체는 배경으로 변환
+                label[i, :] = 0
             else:
-                label[i, cup_width.min():cup_width.max()+1] = 2
+                if len(cup_width[0]) == 0:
+                    fluid_width = np.array(np.where(label[i] == 2))
+                    label[i, fluid_width.min():fluid_width.max()+1] = 2
+                else:
+                    label[i, cup_width.min():cup_width.max()+1] = 2
         else:
             # 컵 액체로 꽉 찬 경우(len(cup_width[0]) < 1) 제외
             label[i, cup_width.min():cup_width.max()+1] = 1
 
-    fluid_height = np.where(label == 2)[0]
-    fluid_height = np.unique(fluid_height)
-    # if want to remove the bottom of the cup >>>>> 요기도 추가 학습 후 고려해볼 것. 액체 추론이 제대로 안 될 경우 아래가 너무 많이 지워짐..
-    cup_height = np.where(label == 1)[0]
-    cup_height = np.unique(cup_height)
-
-    if((len(fluid_height) > 0) and (len(cup_height) > 0)):
-        if (cup_height.max() > fluid_height.max()):
-            for i in range(fluid_height.max()+1, cup_height.max()+1):
-                label[i, :] = 0
     return label
 
 

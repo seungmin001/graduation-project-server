@@ -5,11 +5,6 @@ from deeplab import DeepLabModel
 from trimLabel import trimLabel,checkVolumnOfLiquid
 import os
 
-# 특정 파일 추론 시
-import time
-import numpy as np
-from PIL import Image
-
 
 app = Flask(__name__)
 
@@ -61,28 +56,3 @@ if __name__ == "__main__":
     model=DeepLabModel('') # 서버 실행 시 모델 미리 로드
 
     app.run(host="0.0.0.0", port=8081, debug=True) # 서버 실행
-    
-    '''
-    # 특정 파일 추론 시
-
-    # Make LUT (Look Up Table) with your 3 colours
-    LUT = np.zeros((4,3),dtype=np.uint8)
-    LUT[0]=[0,0,0]
-    LUT[1]=[0,255,0]
-    LUT[2]=[0,0,255]
-    LUT[3]=[255,0,0]  
-
-    # 추론
-    for i  in range(19,21) :
-        filename="./savedModel/air/"+str(i)+".jpg"
-        _,seg_map = inference.run_model(filename, model)
-        issuccess, seg, msg = trimLabel(filename,seg_map)
-        lineLoc, isCheckable, ratioMsg, ratioStatus = checkVolumnOfLiquid(seg,float(100))
-        print(msg,ratioMsg)
-        pixelmap=LUT[seg_map] # label to color mapping
-        im = Image.fromarray(pixelmap)
-        im.save("./savedModel/air/"+str(i)+"_22_trim.jpg")
-    #file=open("./maptxt/glass_30196.txt","w")
-    #np.savetxt(file, seg_map.astype(int), fmt='%i')
-    #file.close()
-    '''

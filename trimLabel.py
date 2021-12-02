@@ -216,11 +216,11 @@ def trimFluidFollowCup(label, cnt_cup):
     cup_height = np.unique(cup_height)
     for i in range(cup_height.min(), cup_height.max()+1):
         cup_width = np.array(np.where(label[i] == 1))
-        if i >= fluid_height:
+        if i >= fluid_height: # 액체 상단부터 컵 하단까지
             if i >= lower_diameter_idx:
                 # 유효한 컵 밑면의 지름(lower_diameter_idx)을 구한 경우 그보다 밑의(값이 큰) 액체는 배경으로 변환
                 label[i, :] = 0
-            else:
+            else: # 액체 상단 부터 컵 밑면지름 행까지
                 if len(cup_width[0]) == 0:
                     fluid_width = np.array(np.where(label[i] == 2))
                     label[i, fluid_width.min():fluid_width.max()+1] = 2
@@ -557,9 +557,9 @@ def trimLabel(image_name, seg_map):
     # 컵 위에서 촬영하는 경우 제한. (컵 윗면의 세로반지름/가로반지름이 긴 경우)
     cup_upper_height = upper_diameter_idx - cup_top[1]
     # if cup_upper_height < 0 : 처리 필요할 듯
-    print('cup_upper_height: ', cup_upper_height)
-    print("upper_diameter ",upper_diameter," upper_diameter_idx ",upper_diameter_idx)
-    print(cup_upper_height / upper_diameter)
+    # print('cup_upper_height: ', cup_upper_height)
+    # print("upper_diameter ",upper_diameter," upper_diameter_idx ",upper_diameter_idx)
+    # print(cup_upper_height / upper_diameter)
     if(cup_upper_height / upper_diameter > 0.25):
         # 컵 윗면이 많이 나온 경우
         return False, label_012, '컵의 정면을 촬영해주세요'

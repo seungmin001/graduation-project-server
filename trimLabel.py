@@ -4,7 +4,7 @@ from math import hypot
 
 # fluid 의 근사선을 찾기 위해 중심점 위치를 비교할 긴 edge의 개수
 FLUID_APPROX_EDGE_NUM = 3
-
+TOTAL_RATIO = 0.7
 
 def get_dist(point_a, point_b):
     x1, y1 = point_a
@@ -282,11 +282,11 @@ def checkVolumnOfLiquid(label, ratio):
 
     # 적정량 기준 : 컵 길이의 10%
     allow_ref = int((cup[0].max() - cup[0].min()) * 0.05 )
-    print("적정 row 범위 : ",allow_ref*2)
-    print(" 허용 하위 row : ",valid_height+allow_ref*1.2," / 허용 상위 row : ",valid_height-allow_ref*0.8)
-    if((fluid_top_height <= valid_height+ allow_ref*1.2) and (fluid_top_height >= valid_height- allow_ref*0.8)): # 높음 / 낮음
-        return lineLoc, True, '적정량을 따랐습니다. :) 잠시 기다려주세요', "good"
-    elif (fluid_top_height > valid_height+ allow_ref*1.2):
+    print("적정 row 범위 : ",allow_ref*1.8)
+    print(" 허용 하위 row : ",valid_height+allow_ref*1," / 허용 상위 row : ",valid_height-allow_ref*0.8)
+    if((fluid_top_height <= valid_height+ allow_ref*1) and (fluid_top_height >= valid_height- allow_ref*0.8)): # 높음 / 낮음
+        return lineLoc, True, '적정량을 따랐습니다. 다음 단계로 진행하세요', "good"
+    elif (fluid_top_height > valid_height+ allow_ref*1):
         return lineLoc, False, '재료를 더 따라주세요', "under"
     else:
         return lineLoc, False, '적정량을 초과하였습니다. 적정선에 맞도록 재료를 덜어주세요', "over"
@@ -356,7 +356,7 @@ def calculateVolumnByPart(cup, fluid, cup_h_top, cup_h_bottom, fluid_h_top, rati
 
         h_part_bottom = h_part_bottom - part_height
 
-    valid_volumn = volumn_sum * 0.8 * ratio/100
+    valid_volumn = volumn_sum * TOTAL_RATIO * ratio/100
 
     h_part_bottom = cup_h_bottom
     virtual_volumn_sum = 0
